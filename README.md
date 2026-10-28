@@ -12,10 +12,9 @@ Un lanzador rápido y seguro para quien mantiene un `.kdbx` por cliente.
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/lock.png" width="215" alt="Pantalla de desbloqueo con Windows Hello" />
-  <img src="docs/screenshots/search.png" width="215" alt="Búsqueda instantánea con la primera coincidencia resaltada" />
-  <img src="docs/screenshots/add-folder.png" width="215" alt="Añadir una carpeta y elegir si se vigila" />
-  <img src="docs/screenshots/settings.png" width="215" alt="Ajustes: tema, idioma, atajo global y bandeja" />
+  <img src="docs/screenshots/search.png" width="280" alt="Búsqueda instantánea con la primera coincidencia resaltada" />
+  <img src="docs/screenshots/add-folder.png" width="280" alt="Añadir una carpeta y elegir si se vigila" />
+  <img src="docs/screenshots/settings.png" width="280" alt="Ajustes: tema, idioma, atajo global y bandeja" />
 </p>
 
 <p align="center"><sub>Capturas con datos ficticios.</sub></p>
