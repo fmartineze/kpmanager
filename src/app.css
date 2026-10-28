@@ -1,0 +1,61 @@
+/* Ajustes propios de la app sobre kp.css (sistema de diseño) */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--kp-bg); overflow: hidden; }
+button { font-family: inherit; }
+
+/* En la app real la ventana ocupa todo el área; no hay lienzo alrededor */
+.win.app-win { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+.titlebar > :not(button) { pointer-events: none; }
+.titlebar { user-select: none; }
+
+.scrim.leaving { opacity: 0; transition: opacity 140ms var(--kp-ease-in); }
+.scrim.leaving .modal { transform: translateY(8px) scale(.98); transition: transform 140ms var(--kp-ease-in); }
+
+/* Listas dentro de modales */
+.results-list { max-height: 232px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--kp-scroll) transparent; }
+.res { cursor: pointer; }
+.res.static { cursor: default; }
+.res.wrap { flex-wrap: wrap; }
+.res-actions { display: flex; gap: 6px; width: 100%; justify-content: flex-end; }
+.res .badge { flex: none; }
+
+/* Pregunta de seguimiento de carpeta */
+.choice { display: flex; flex-direction: column; gap: 8px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.choice legend { padding: 0; margin-bottom: 8px; font-size: var(--kp-fs-sm); font-weight: 650; }
+.choice-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--kp-radius-lg); cursor: pointer;
+  background: var(--kp-glass); border: 1px solid var(--kp-glass-border); box-shadow: 0 0 0 1px var(--kp-glass-edge), var(--kp-glass-hi);
+  transition: border-color var(--kp-dur-fast) var(--kp-ease-out), background var(--kp-dur-fast), transform var(--kp-dur-fast) var(--kp-ease-out), box-shadow var(--kp-dur-base); }
+.choice-card:hover { border-color: var(--kp-accent-border); }
+.choice-card:active { transform: scale(.99); }
+.choice-card.on { border-color: var(--kp-accent); background: var(--kp-accent-soft); box-shadow: 0 0 0 3px var(--kp-ring); }
+.choice-card .radio { width: 18px; height: 18px; flex: none; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--kp-border-strong); background: var(--kp-input-bg);
+  display: grid; place-items: center; transition: border-color var(--kp-dur-fast), background var(--kp-dur-fast); }
+.choice-card.on .radio { border-color: var(--kp-accent); background: var(--kp-accent-grad); }
+.choice-card.on .radio::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: kp-pop var(--kp-dur-base) var(--kp-ease-spring) both; }
+.choice-card .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.choice-card strong { font-size: var(--kp-fs-sm); font-weight: 650; }
+.choice-card small { font-size: var(--kp-fs-xs); color: var(--kp-text-2); line-height: 1.45; }
+
+.hello-row { display: flex; align-items: center; gap: 10px; }
+.hello-row .help { flex: 1; }
+.empty .stack .btn { width: 100%; }
+.toast .btn-icon.plain { flex: none; }
+.titlebar .tb-btn { flex: none; }
+
+.btn-link.suggest { align-self: flex-start; height: 28px; padding: 0 4px; font-size: var(--kp-fs-xs); font-weight: 600; }
+
+/* Favoritos: la estrella se rellena y destaca; en reposo solo asoma al pasar el puntero */
+.row-edit.fav { opacity: 0; }
+.row:hover .row-edit.fav, .row.is-focus .row-edit.fav, .row-edit.fav:focus-visible { opacity: .75; }
+.row-edit.fav.on, .row:hover .row-edit.fav.on { opacity: 1; color: var(--kp-accent-text); }
+.row-edit.fav.on svg { fill: currentColor; }
+.row-edit.fav:hover { color: var(--kp-accent-text); }
+
+/* Atajo: campo de captura */
+.input.capture { cursor: pointer; }
+.input.capture .input-el { cursor: pointer; caret-color: transparent; }
+.input.capture.is-focus, .input.capture:focus-within { border-color: var(--kp-accent); }
+
+/* El cuerpo del modal hace scroll: sus bloques no deben comprimirse para caber (la lista de resultados se aplastaba) */
+.modal-body > * { flex-shrink: 0; }
