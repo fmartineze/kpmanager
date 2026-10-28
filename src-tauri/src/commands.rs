@@ -151,6 +151,15 @@ pub fn hello_disable(hello: State<Hello>) {
     hello.disable();
 }
 
+/// Borra todos los datos cifrados (clientes, credenciales, carpetas, contraseña maestra y Windows Hello).
+/// Conserva las preferencias de aspecto y no toca ningún `.kdbx`.
+#[tauri::command]
+pub fn reset_data(store: State<Store>, hello: State<Hello>) -> Result<()> {
+    store.erase()?;
+    hello.disable();
+    Ok(())
+}
+
 /// Autentica con Windows Hello y desbloquea. Si falla, la UI cae a la contraseña maestra.
 #[tauri::command]
 pub async fn hello_unlock(store: State<'_, Store>, hello: State<'_, Hello>) -> Result<()> {

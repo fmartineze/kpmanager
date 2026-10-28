@@ -79,6 +79,8 @@ export const api = {
   helloStatus: () => invoke<HelloStatus>("hello_status"),
   helloEnable: (password: string) => invoke<void>("hello_enable", { password }),
   helloDisable: () => invoke<void>("hello_disable"),
+  /** Borra todos los datos cifrados; la app vuelve al primer uso. */
+  resetData: () => invoke<void>("reset_data"),
   helloUnlock: () => invoke<void>("hello_unlock"),
   changeMasterPassword: (password: string) => invoke<void>("change_master_password", { password }),
   listVaults: () => invoke<Vault[]>("list_vaults"),

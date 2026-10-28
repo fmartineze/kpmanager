@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, errMsg, HelloStatus, Prefs, PrefsUpdate } from "../api";
 import { useT } from "../i18n";
 import { Modal } from "./Modal";
-import { IconFingerprint, IconKey, IconSettings } from "./Icons";
+import { IconFingerprint, IconKey, IconSettings, IconTrash } from "./Icons";
 import { Alert, Check, Segmented } from "./ui";
 import { comboFromEvent, DEFAULT_SHORTCUT } from "../shortcut";
 
@@ -11,9 +11,11 @@ interface Props {
   onClose: () => void;
   /** El tema y el idioma se aplican en cuanto cambian, sin esperar a cerrar. */
   onPrefs: (p: Prefs) => void;
+  /** Se borraron todos los datos: la app debe volver al primer uso. */
+  onReset: () => void;
 }
 
-export function SettingsDialog({ onClose, onPrefs }: Props) {
+export function SettingsDialog({ onClose, onPrefs, onReset }: Props) {
   const t = useT();
   const [exe, setExe] = useState("");
   const [keyfile, setKeyfile] = useState("");
@@ -23,6 +25,7 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [combo, setCombo] = useState("");
   const [shortcutErr, setShortcutErr] = useState("");
+  const [confirmErase, setConfirmErase] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -118,6 +121,12 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
       await api.helloDisable();
       setHello(await api.helloStatus());
       setMsg(t("settings.helloDisabled"));
+    });
+
+  const erase = () =>
+    run(async () => {
+      await api.resetData();
+      onReset();
     });
 
   const changePw = () =>
@@ -267,6 +276,29 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
           </div>
           <button className="btn btn-secondary" onClick={changePw} disabled={!newPw}>{t("settings.change")}</button>
         </div>
+      </div>
+
+      <div className="section">
+        <span className="section-title">{t("settings.data")}</span>
+        {confirmErase ? (
+          <div className="confirm">
+            <div className="confirm-row">
+              <span className="confirm-q"><IconTrash className="s16" /> {t("settings.eraseQ")}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setConfirmErase(false)}>{t("common.cancel")}</button>
+              <button className="btn btn-danger-solid btn-sm" onClick={erase}>{t("settings.eraseYes")}</button>
+            </div>
+            <div className="note">{t("settings.eraseNote")}</div>
+          </div>
+        ) : (
+          <>
+            <div className="help">{t("settings.eraseHelp")}</div>
+            <div className="btns">
+              <button className="btn btn-danger btn-sm" onClick={() => setConfirmErase(true)}>
+                <IconTrash className="s16" /> {t("settings.erase")}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {msg && <Alert kind="ok">{msg}</Alert>}

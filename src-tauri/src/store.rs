@@ -78,6 +78,22 @@ impl Store {
         *self.inner.lock().unwrap() = None;
     }
 
+    /// Borra el fichero cifrado y vacía la memoria: la app queda como en el primer arranque.
+    /// Solo se permite con la app desbloqueada, para que no sea accesible sin la contraseña maestra.
+    pub fn erase(&self) -> Result<()> {
+        let mut guard = self.inner.lock().unwrap();
+        if guard.is_none() {
+            return Err(AppError::Locked);
+        }
+        match fs::remove_file(&self.path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()), // no se pudo borrar: se conserva el estado en memoria
+        }
+        *guard = None;
+        Ok(())
+    }
+
     pub fn read<R>(&self, f: impl FnOnce(&Data) -> R) -> Result<R> {
         let guard = self.inner.lock().unwrap();
         Ok(f(&guard.as_ref().ok_or(AppError::Locked)?.data))
@@ -141,6 +157,27 @@ mod tests {
         assert!(matches!(s2.unlock("x"), Err(AppError::WrongPassword)));
         s2.unlock("m").unwrap();
         assert_eq!(s2.read(|d| d.vaults.len()).unwrap(), 1);
+    }
+
+    #[test]
+    fn erase_requires_unlock_and_resets_to_first_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vaults.enc");
+        let s = Store::with_cost(path.clone(), FAST);
+        s.unlock("m").unwrap();
+        s.write(|d| { d.vaults.push(vault("acme")); Ok(()) }).unwrap();
+        s.lock();
+        assert!(matches!(s.erase(), Err(AppError::Locked)), "bloqueada no puede borrar");
+        assert!(path.is_file(), "y el fichero sigue ahí");
+
+        s.unlock("m").unwrap();
+        s.erase().unwrap();
+        assert!(!path.exists());
+        assert!(!s.exists() && !s.is_unlocked());
+
+        // Como en el primer arranque: una contraseña nueva cualquiera crea un almacén vacío.
+        s.unlock("otra").unwrap();
+        assert_eq!(s.read(|d| d.vaults.len()).unwrap(), 0);
     }
 
     #[test]

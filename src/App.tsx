@@ -268,6 +268,19 @@ export default function App() {
     }
   }
 
+  // Tras borrar todos los datos la app queda como en el primer arranque: crear contraseña maestra.
+  const resetDone = useCallback(() => {
+    setVaults([]);
+    setQuery("");
+    setNavigated(false);
+    setDialog(null);
+    setOpening(null);
+    setHello((h) => ({ ...h, enabled: false }));
+    setAutoHello(false);
+    setIsNew(true);
+    setPhase("locked");
+  }, []);
+
   const saved = async (msg: string) => {
     setDialog(null);
     await refresh();
@@ -372,7 +385,7 @@ export default function App() {
         />
       )}
       {dialog?.kind === "sync" && <SyncDialog report={dialog.report} onClose={() => setDialog(null)} onDone={saved} />}
-      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} onPrefs={applyPrefs} />}
+      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} onPrefs={applyPrefs} onReset={resetDone} />}
 
       {toast && (
         <div className="toasts">

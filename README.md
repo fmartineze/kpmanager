@@ -118,7 +118,7 @@ Dónde guarda sus datos (en `%APPDATA%\kpmanager\KPManager\config`):
 | `hello.bin` | Contraseña maestra protegida por Windows Hello. **Cifrado.** |
 | `prefs.json` | Tema, idioma, atajo, orden y opciones de ventana. Sin datos sensibles. |
 
-> 💾 Haz copia de seguridad de `vaults.enc` si no quieres perder tus credenciales guardadas. Para empezar de cero, cierra la app y borra esa carpeta.
+> 💾 Haz copia de seguridad de `vaults.enc` si no quieres perder tus credenciales guardadas. Para empezar de cero, usa **Ajustes → Datos → Borrar todos los datos** (pide confirmación y no toca tus `.kdbx`). Si has olvidado la contraseña maestra y no puedes entrar a Ajustes, cierra la app y borra esa carpeta.
 
 ## Preguntas frecuentes
 

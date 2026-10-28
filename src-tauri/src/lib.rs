@@ -54,6 +54,7 @@ pub fn run() {
             commands::hello_status,
             commands::hello_enable,
             commands::hello_disable,
+            commands::reset_data,
             commands::hello_unlock,
             commands::list_vaults,
             commands::add_vault,
