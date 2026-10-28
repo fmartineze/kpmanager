@@ -87,6 +87,18 @@ export default function App() {
     window.setTimeout(() => setToast((t) => (t?.key === key ? null : t)), kind === "error" ? 7000 : 4000);
   }, []);
 
+  // Si el atajo global no se pudo registrar al arrancar (otra aplicación lo usa…), la app no tiene
+  // consola donde avisar: se lo decimos al usuario una vez, nada más ver la pantalla principal.
+  const shortcutWarned = useRef(false);
+  useEffect(() => {
+    if (phase !== "ready" || shortcutWarned.current) return;
+    shortcutWarned.current = true;
+    api
+      .shortcutStatus()
+      .then((err) => err && showToast(translate("toast.shortcutFailed", { err: errMsg(err) }), "error"))
+      .catch(() => {});
+  }, [phase, showToast]);
+
   const refresh = useCallback(async () => setVaults(await api.listVaults()), []);
   const lastCheck = useRef(0);
 

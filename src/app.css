@@ -68,3 +68,14 @@ button { font-family: inherit; }
 .seg-btn:hover { color: var(--kp-text); }
 .seg-btn.on { background: var(--kp-accent-grad); color: #fff; box-shadow: var(--kp-shadow-accent-sm), var(--kp-highlight); }
 .seg-btn:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--kp-bg), 0 0 0 4px var(--kp-accent); }
+
+/* ---- Legibilidad de modales y avisos ----
+   El diseño usa cristal translúcido + desenfoque. Si el WebView no aplica backdrop-filter (o el equipo va justo
+   de GPU), lo que hay detrás se ve nítido a través del modal y el texto se pisa. El fondo del modal y de los
+   avisos es ahora casi opaco: con desenfoque se ve igual de bien y sin él sigue legible. */
+:root, .kp-light { --kp-modal-bg: rgba(255, 255, 255, .965); --kp-scrim-strong: rgba(18, 18, 40, .46); }
+.kp-dark { --kp-modal-bg: rgba(24, 24, 40, .975); --kp-scrim-strong: rgba(4, 4, 12, .68); --kp-toast-bg: rgba(40, 40, 64, .97); }
+:root, .kp-light { --kp-toast-bg: rgba(22, 22, 38, .96); }
+
+.scrim { background: var(--kp-scrim-strong); backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%); }
+.modal { background: var(--kp-glass-sheen), var(--kp-modal-bg); }

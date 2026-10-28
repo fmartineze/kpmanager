@@ -129,7 +129,10 @@ En tus ficheros `.kdbx`, como siempre. KP Manager solo puede recordar la contras
 No. Es opcional. Sin ella, KeePassXC se abre y te la pide como siempre.
 
 **El atajo global no funciona.**
-Otra aplicación puede estar usando esa combinación. Elige otra en **Ajustes → Acceso rápido**; la app avisa si no puede registrarla.
+Si la combinación está ocupada por otra aplicación, KP Manager te lo avisa al arrancar y también en **Ajustes → Acceso rápido**; elige otra distinta. Otras causas posibles:
+
+- **Una ventana ejecutada como administrador en primer plano.** Windows no entrega los atajos globales de una aplicación normal mientras tienes el foco en una ventana con privilegios elevados (por ejemplo, una consola de administrador). Cambia el foco a otra ventana y vuelve a probar.
+- **Teclados con tecla AltGr.** En algunas distribuciones, `Ctrl + Alt` equivale a `AltGr` y puede chocar con caracteres especiales. Prueba con otra combinación, como `Ctrl + Mayús + K`.
 
 **Windows Hello no aparece en Ajustes.**
 Tu equipo no tiene Hello configurado o no es compatible. Configúralo en *Configuración de Windows → Cuentas → Opciones de inicio de sesión*.

@@ -108,6 +108,21 @@ pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
     }
 }
 
+/// Resultado del último intento de registrar el atajo global: `None` = registrado (o sin atajo).
+/// Se guarda como JSON (`{code, arg, message}`) para que la interfaz lo muestre traducido.
+#[derive(Default)]
+pub struct ShortcutStatus(pub std::sync::Mutex<Option<serde_json::Value>>);
+
+impl ShortcutStatus {
+    pub fn set(&self, result: &Result<()>) {
+        *self.0.lock().unwrap() = result.as_ref().err().and_then(|e| serde_json::to_value(e).ok());
+    }
+
+    pub fn get(&self) -> Option<serde_json::Value> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
 fn parse(s: &str) -> Result<Shortcut> {
     s.parse::<Shortcut>()
         .map_err(|_| AppError::msg_arg("shortcutInvalid", s))

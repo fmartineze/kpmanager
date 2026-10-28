@@ -22,6 +22,7 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
   const [hello, setHello] = useState<HelloStatus | null>(null);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [combo, setCombo] = useState("");
+  const [shortcutErr, setShortcutErr] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -35,6 +36,7 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
       setKeyfile(s.defaultKeyfile ?? "");
     });
     api.helloStatus().then(setHello);
+    api.shortcutStatus().then((e) => setShortcutErr(e ? errMsg(e) : ""));
   }, []);
 
   async function run(fn: () => Promise<void>) {
@@ -92,6 +94,7 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
       const p = await api.setShortcut(value);
       setPrefs(p);
       setCombo(p.shortcut ?? "");
+      setShortcutErr(""); // si hubo error, set_shortcut habría fallado antes de llegar aquí
       setMsg(p.shortcut ? t("settings.shortcutSet", { key: p.shortcut }) : t("settings.shortcutOff"));
     });
 
@@ -192,6 +195,7 @@ export function SettingsDialog({ onClose, onPrefs }: Props) {
             />
           </div>
           <div className="help">{t("settings.shortcutHelp")}</div>
+          {shortcutErr && <Alert kind="err">{t("settings.shortcutFailed", { err: shortcutErr })}</Alert>}
         </div>
         <div className="btns">
           <button className="btn btn-secondary btn-sm" onClick={() => saveShortcut(combo || null)} disabled={combo === (prefs?.shortcut ?? "")}>{t("settings.saveShortcut")}</button>

@@ -314,11 +314,23 @@ pub fn set_tray_language(app: tauri::AppHandle, language: String) {
 
 /// `None` o vacío quita el atajo global. Si no se puede registrar, el anterior se conserva.
 #[tauri::command]
-pub fn set_shortcut(app: tauri::AppHandle, prefs: State<PrefsState>, shortcut: Option<String>) -> Result<Prefs> {
+pub fn set_shortcut(
+    app: tauri::AppHandle,
+    prefs: State<PrefsState>,
+    status: State<shell::ShortcutStatus>,
+    shortcut: Option<String>,
+) -> Result<Prefs> {
     let shortcut = shortcut.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
     let old = prefs.get().shortcut;
     shell::change_shortcut(&app, old.as_deref(), shortcut.as_deref())?;
+    status.set(&Ok(())); // el nuevo atajo sí quedó registrado
     prefs.update(|p| p.shortcut = shortcut)
+}
+
+/// Motivo por el que el atajo global no está activo, si no lo está (`{code, arg, message}`).
+#[tauri::command]
+pub fn shortcut_status(status: State<shell::ShortcutStatus>) -> Option<serde_json::Value> {
+    status.get()
 }
 
 #[tauri::command]

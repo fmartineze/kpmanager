@@ -37,6 +37,7 @@ export const es = {
   "toast.imported": "Vaults importados",
   "toast.noChanges": "Carpetas en seguimiento sin cambios",
   "toast.unreachable": "Carpeta no accesible: {path}",
+  "toast.shortcutFailed": "El atajo global no está activo: {err}. Cámbialo en Ajustes → Acceso rápido.",
 
   // Desbloqueo
   "unlock.chipNew": "Primer uso",
@@ -158,6 +159,7 @@ export const es = {
   "settings.shortcutHelp": "Haz clic en el campo y pulsa la combinación (con Ctrl, Alt, Mayús o Win). Funciona desde cualquier aplicación.",
   "settings.saveShortcut": "Guardar atajo",
   "settings.reset": "Restablecer",
+  "settings.shortcutFailed": "El atajo no está activo: {err}",
   "settings.shortcutSet": "Atajo global: {key}",
   "settings.shortcutOff": "Atajo global desactivado",
   "settings.window": "Ventana y lista",

@@ -38,9 +38,12 @@ pub fn run() {
             let shortcut = prefs.get().shortcut;
             app.manage(prefs);
             shell::setup_tray(app.handle())?;
-            if let Err(e) = shell::change_shortcut(app.handle(), None, shortcut.as_deref()) {
-                eprintln!("atajo global: {e}");
-            }
+            // Si el atajo no se puede registrar (p. ej. lo usa otra aplicación) no hay ventana de consola
+            // donde verlo: se guarda el motivo para que la interfaz lo muestre.
+            let status = shell::ShortcutStatus::default();
+            let result = shell::change_shortcut(app.handle(), None, shortcut.as_deref());
+            status.set(&result);
+            app.manage(status);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -75,6 +78,7 @@ pub fn run() {
             commands::set_prefs,
             commands::set_tray_language,
             commands::set_shortcut,
+            commands::shortcut_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

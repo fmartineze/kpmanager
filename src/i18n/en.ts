@@ -35,6 +35,7 @@ export const en: Record<Key, string> = {
   "toast.imported": "Vaults imported",
   "toast.noChanges": "Watched folders are up to date",
   "toast.unreachable": "Folder not reachable: {path}",
+  "toast.shortcutFailed": "The global shortcut is not active: {err}. Change it in Settings → Quick access.",
 
   "unlock.chipNew": "First run",
   "unlock.chipLocked": "Locked",
@@ -149,6 +150,7 @@ export const en: Record<Key, string> = {
   "settings.shortcutHelp": "Click the field and press the combination (with Ctrl, Alt, Shift or Win). It works from any application.",
   "settings.saveShortcut": "Save shortcut",
   "settings.reset": "Reset",
+  "settings.shortcutFailed": "The shortcut is not active: {err}",
   "settings.shortcutSet": "Global shortcut: {key}",
   "settings.shortcutOff": "Global shortcut disabled",
   "settings.window": "Window and list",
