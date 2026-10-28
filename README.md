@@ -1,5 +1,7 @@
 <div align="center">
 
+**Español** · [English](README.en.md)
+
 <img src="design/icon.svg" width="120" alt="KP Manager" />
 
 # KP Manager
