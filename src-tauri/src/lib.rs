@@ -73,6 +73,7 @@ pub fn run() {
             commands::set_favorite,
             commands::get_prefs,
             commands::set_prefs,
+            commands::set_tray_language,
             commands::set_shortcut,
         ])
         .run(tauri::generate_context!())

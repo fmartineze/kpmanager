@@ -52,7 +52,7 @@ impl Store {
     /// Desbloquea; si aún no existe el fichero, crea uno nuevo con esa contraseña maestra.
     pub fn unlock(&self, password: &str) -> Result<()> {
         if password.is_empty() {
-            return Err(AppError::Invalid("La contraseña maestra no puede estar vacía".into()));
+            return Err(AppError::msg("masterEmpty"));
         }
         let unlocked = if self.exists() {
             let blob = fs::read(&self.path)?;
@@ -96,7 +96,7 @@ impl Store {
 
     pub fn change_password(&self, new_password: &str) -> Result<()> {
         if new_password.is_empty() {
-            return Err(AppError::Invalid("La contraseña maestra no puede estar vacía".into()));
+            return Err(AppError::msg("masterEmpty"));
         }
         let mut guard = self.inner.lock().unwrap();
         let st = guard.as_mut().ok_or(AppError::Locked)?;

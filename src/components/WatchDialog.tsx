@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, errMsg, WatchedView } from "../api";
+import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconFolder, IconPlus } from "./Icons";
 import { Alert } from "./ui";
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function WatchDialog({ onClose, onAdd, onRescan, onCheck }: Props) {
+  const t = useT();
   const [view, setView] = useState<WatchedView | null>(null);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -35,29 +37,29 @@ export function WatchDialog({ onClose, onAdd, onRescan, onCheck }: Props) {
   const remove = (path: string) =>
     run(async () => {
       await api.removeWatched(path);
-      setMsg("Carpeta quitada del seguimiento. Sus vaults siguen en la lista.");
+      setMsg(t("watch.removed"));
     });
 
   const resetIgnored = () =>
     run(async () => {
       await api.clearIgnored();
-      setMsg("Los vaults descartados volverán a proponerse en la próxima revisión.");
+      setMsg(t("watch.reproposed"));
     });
 
   const folders = view?.folders ?? [];
 
   const footer = (
     <>
-      <button className="btn btn-secondary" onClick={onAdd}><IconPlus className="s16" /> Añadir carpeta</button>
+      <button className="btn btn-secondary" onClick={onAdd}><IconPlus className="s16" /> {t("list.addFolder")}</button>
       <span className="grow" />
-      <button className="btn btn-primary" disabled={folders.length === 0} onClick={onCheck}>Revisar ahora</button>
+      <button className="btn btn-primary" disabled={folders.length === 0} onClick={onCheck}>{t("watch.checkNow")}</button>
     </>
   );
 
   return (
     <Modal
-      title="Carpetas"
-      subtitle="Importa vaults y vigila carpetas en busca de cambios."
+      title={t("watch.title")}
+      subtitle={t("watch.sub")}
       icon={<IconFolder className="s16" />}
       onClose={onClose}
       footer={footer}
@@ -65,8 +67,8 @@ export function WatchDialog({ onClose, onAdd, onRescan, onCheck }: Props) {
       {folders.length === 0 ? (
         <div className="empty" style={{ padding: "12px 8px" }}>
           <div className="empty-art neutral"><IconFolder /></div>
-          <h2>Sin carpetas en seguimiento</h2>
-          <p>Añade una carpeta y elige mantenerla en seguimiento: te avisaré de los .kdbx nuevos y de los que desaparezcan.</p>
+          <h2>{t("watch.emptyTitle")}</h2>
+          <p>{t("watch.emptyText")}</p>
         </div>
       ) : (
         <div className="results">
@@ -78,13 +80,13 @@ export function WatchDialog({ onClose, onAdd, onRescan, onCheck }: Props) {
               </span>
               <span className={`badge ${f.reachable ? "badge-ok" : "badge-err"}`}>
                 <span className="dot" />
-                {f.reachable ? `${f.vaults} ${f.vaults === 1 ? "vault" : "vaults"}` : "No accesible"}
+                {f.reachable ? t(f.vaults === 1 ? "watch.vaultOne" : "watch.vaultMany", { n: f.vaults }) : t("watch.unreachable")}
               </span>
               <div className="res-actions">
-                <button className="btn btn-secondary btn-sm" disabled={!f.reachable} title="Escaneo completo, incluidos los vaults descartados" onClick={() => onRescan(f.path)}>
-                  Re-escanear
+                <button className="btn btn-secondary btn-sm" disabled={!f.reachable} title={t("watch.rescanTitle")} onClick={() => onRescan(f.path)}>
+                  {t("watch.rescan")}
                 </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => remove(f.path)}>Quitar</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => remove(f.path)}>{t("common.remove")}</button>
               </div>
             </div>
           ))}
@@ -93,8 +95,8 @@ export function WatchDialog({ onClose, onAdd, onRescan, onCheck }: Props) {
 
       {view && view.ignoredCount > 0 && (
         <div className="hello-row">
-          <span className="help">{view.ignoredCount} vault(s) descartado(s) no se vuelven a proponer.</span>
-          <button className="btn btn-link" onClick={resetIgnored}>Volver a proponerlos</button>
+          <span className="help">{t("watch.ignoredNote", { n: view.ignoredCount })}</span>
+          <button className="btn btn-link" onClick={resetIgnored}>{t("watch.repropose")}</button>
         </div>
       )}
       {msg && <Alert kind="ok">{msg}</Alert>}

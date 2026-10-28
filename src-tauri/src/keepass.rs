@@ -154,10 +154,7 @@ pub fn build_args(vault: &Vault) -> Vec<std::ffi::OsString> {
 /// Lanza KeePassXC con el vault. La contraseña viaja por stdin, nunca por la línea de comandos.
 pub fn open(exe: &Executable, vault: &Vault) -> Result<()> {
     if !Path::new(&vault.path).is_file() {
-        return Err(AppError::Invalid(format!(
-            "No existe el fichero {}",
-            vault.path.display()
-        )));
+        return Err(AppError::msg_arg("fileMissing", vault.path.display().to_string()));
     }
     let mut cmd = Command::new(&exe.program);
     cmd.args(&exe.args_prefix).args(build_args(vault));

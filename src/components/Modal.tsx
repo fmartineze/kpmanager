@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { IconX } from "./Icons";
+import { useT } from "../i18n";
 
 interface Props {
   title: string;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function Modal({ title, subtitle, icon, onClose, children, footer }: Props) {
+  const t = useT();
   const [leaving, setLeaving] = useState(false);
 
   // Animación de salida antes de desmontar.
@@ -34,7 +36,7 @@ export function Modal({ title, subtitle, icon, onClose, children, footer }: Prop
             <h2 className="modal-title">{title}</h2>
             {subtitle && <p className="modal-sub">{subtitle}</p>}
           </div>
-          <button className="btn btn-icon plain" onClick={close} aria-label="Cerrar">
+          <button className="btn btn-icon plain" onClick={close} aria-label={t("common.close")}>
             <IconX className="s16" />
           </button>
         </div>

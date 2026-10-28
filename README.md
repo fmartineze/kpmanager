@@ -12,10 +12,13 @@ Un lanzador rápido y seguro para quien mantiene un `.kdbx` por cliente.
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/09-bloqueo.png" width="260" alt="Pantalla de desbloqueo con Windows Hello" />
-  <img src="docs/screenshots/02-busqueda.png" width="260" alt="Búsqueda instantánea con la primera coincidencia resaltada" />
-  <img src="docs/screenshots/03-abriendo.png" width="260" alt="Abriendo un vault en KeePassXC" />
+  <img src="docs/screenshots/lock.png" width="215" alt="Pantalla de desbloqueo con Windows Hello" />
+  <img src="docs/screenshots/search.png" width="215" alt="Búsqueda instantánea con la primera coincidencia resaltada" />
+  <img src="docs/screenshots/add-folder.png" width="215" alt="Añadir una carpeta y elegir si se vigila" />
+  <img src="docs/screenshots/settings.png" width="215" alt="Ajustes: tema, idioma, atajo global y bandeja" />
 </p>
+
+<p align="center"><sub>Capturas con datos ficticios.</sub></p>
 
 ---
 
@@ -37,25 +40,8 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🔐 **Credenciales cifradas** con una contraseña maestra propia, y desbloqueo con **Windows Hello** (huella, rostro o PIN).
 - 🔑 **Keyfile predeterminada** para no repetirla en cada vault.
 - 🪟 **Siempre a mano:** vive en la bandeja del sistema y se abre desde cualquier aplicación con un **atajo global** configurable (por defecto `Ctrl + Alt + K`).
-- 🌗 **Tema claro y oscuro** automático, según el sistema.
-
-## Capturas
-
-*Todos los clientes, rutas y datos que ves son ficticios.*
-
-| Lista y favoritos | Editar un vault | Añadir una carpeta |
-| :---: | :---: | :---: |
-| <img src="docs/screenshots/01-lista.png" width="260" alt="Lista de clientes con favoritos arriba" /> | <img src="docs/screenshots/04-editar.png" width="260" alt="Editar un vault" /> | <img src="docs/screenshots/06-anadir-carpeta.png" width="260" alt="Añadir una carpeta y elegir si se vigila" /> |
-| **Carpetas en seguimiento** | **Cambios detectados** | **Ajustes** |
-| <img src="docs/screenshots/05-carpetas.png" width="260" alt="Gestión de carpetas en seguimiento" /> | <img src="docs/screenshots/07-cambios.png" width="260" alt="Vaults nuevos y desaparecidos" /> | <img src="docs/screenshots/08-ajustes.png" width="260" alt="Ajustes: atajo global, bandeja, keyfile y Windows Hello" /> |
-
-**Tema oscuro y primer uso**
-
-<p>
-  <img src="docs/screenshots/11-lista-oscuro.png" width="260" alt="Lista en tema oscuro" />
-  <img src="docs/screenshots/12-bloqueo-oscuro.png" width="260" alt="Desbloqueo en tema oscuro" />
-  <img src="docs/screenshots/10-primer-uso.png" width="260" alt="Creación de la contraseña maestra" />
-</p>
+- 🌗 **Tema claro, oscuro o el del sistema**, a tu elección.
+- 🌍 **Español e inglés.** Se elige solo según el idioma de Windows (español si lo es, inglés en cualquier otro caso) y se puede fijar en Ajustes.
 
 ## Instalación
 
@@ -106,6 +92,10 @@ Desde **Carpetas** puedes ver el estado de cada una, **re-escanearla por complet
 
 En **Ajustes → Windows Hello**, confirma tu contraseña maestra y actívalo. A partir de ahí la app se desbloquea con tu huella, rostro o PIN. Si falla o lo cancelas, siempre puedes usar la contraseña maestra. Si cambias la contraseña maestra, Hello se desactiva y hay que volver a activarlo.
 
+### Tema e idioma
+
+En **Ajustes → Apariencia** eliges el tema (**Sistema**, **Claro** u **Oscuro**) y el idioma (**Automático**, **Español** o **English**). El cambio se aplica al instante. Con «Automático», la app usa español si Windows está en español y inglés en cualquier otro caso.
+
 ### Bandeja del sistema
 
 Por defecto, **cerrar la ventana no cierra la app**: se queda en la bandeja y reaparece con el atajo global. Para cerrarla del todo, **clic derecho en el icono de la bandeja → Cerrar KP Manager**.
@@ -126,7 +116,7 @@ Dónde guarda sus datos (en `%APPDATA%\kpmanager\KPManager\config`):
 | --- | --- |
 | `vaults.enc` | Clientes, rutas, credenciales guardadas y carpetas en seguimiento. **Cifrado.** |
 | `hello.bin` | Contraseña maestra protegida por Windows Hello. **Cifrado.** |
-| `prefs.json` | Atajo, orden y opciones de ventana. Sin datos sensibles. |
+| `prefs.json` | Tema, idioma, atajo, orden y opciones de ventana. Sin datos sensibles. |
 
 > 💾 Haz copia de seguridad de `vaults.enc` si no quieres perder tus credenciales guardadas. Para empezar de cero, cierra la app y borra esa carpeta.
 

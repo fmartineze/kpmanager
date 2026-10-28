@@ -59,7 +59,7 @@ fn unwrap_password(signature: &[u8], blob: &[u8]) -> Result<Zeroizing<String>> {
     let nonce = XNonce::from_slice(&blob[HEADER_LEN..HEADER_LEN + NONCE_LEN]);
     let pt = cipher
         .decrypt(nonce, Payload { msg: &blob[HEADER_LEN + NONCE_LEN..], aad: &blob[..HEADER_LEN] })
-        .map_err(|_| AppError::Invalid("Windows Hello ya no coincide con la configuración guardada. Vuelve a activarlo".into()))?;
+        .map_err(|_| AppError::msg("helloMismatch"))?;
     String::from_utf8(pt).map(Zeroizing::new).map_err(|_| AppError::BadFormat)
 }
 
@@ -124,20 +124,20 @@ mod platform {
     }
 
     fn err(e: windows::core::Error) -> AppError {
-        AppError::Invalid(format!("Windows Hello: {}", e.message()))
+        AppError::msg_arg("helloGeneric", e.message().to_string())
     }
 
     fn check(status: KeyCredentialStatus) -> Result<()> {
         match status {
             KeyCredentialStatus::Success => Ok(()),
-            KeyCredentialStatus::UserCanceled => Err(AppError::Invalid("Windows Hello cancelado".into())),
+            KeyCredentialStatus::UserCanceled => Err(AppError::msg("helloCanceled")),
             KeyCredentialStatus::NotFound => {
-                Err(AppError::Invalid("No hay credencial de Windows Hello. Vuelve a activarlo".into()))
+                Err(AppError::msg("helloNoCredential"))
             }
             KeyCredentialStatus::SecurityDeviceLocked => {
-                Err(AppError::Invalid("El dispositivo de seguridad está bloqueado".into()))
+                Err(AppError::msg("helloDeviceLocked"))
             }
-            other => Err(AppError::Invalid(format!("Windows Hello no disponible ({other:?})"))),
+            other => Err(AppError::msg_arg("helloUnavailable", format!("{other:?}"))),
         }
     }
 
@@ -200,7 +200,7 @@ mod platform {
     use crate::error::{AppError, Result};
 
     fn unsupported() -> AppError {
-        AppError::Invalid("Windows Hello solo está disponible en Windows".into())
+        AppError::msg("helloWindowsOnly")
     }
 
     pub fn is_supported() -> bool {

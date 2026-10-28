@@ -19,11 +19,38 @@ pub fn show_main(app: &AppHandle) {
     }
 }
 
+/// Textos del menú de la bandeja: (abrir, bloquear, cerrar). Cualquier idioma desconocido usa inglés.
+pub fn tray_labels(language: &str) -> (&'static str, &'static str, &'static str) {
+    match language {
+        "es" => ("Abrir KP Manager", "Bloquear", "Cerrar KP Manager"),
+        _ => ("Open KP Manager", "Lock", "Quit KP Manager"),
+    }
+}
+
+/// Elementos del menú, guardados para poder cambiar su idioma sin reconstruir la bandeja.
+struct TrayItems {
+    open: MenuItem<tauri::Wry>,
+    lock: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+pub fn set_tray_language(app: &AppHandle, language: &str) {
+    if let Some(items) = app.try_state::<TrayItems>() {
+        let (open, lock, quit) = tray_labels(language);
+        let _ = items.open.set_text(open);
+        let _ = items.lock.set_text(lock);
+        let _ = items.quit.set_text(quit);
+    }
+}
+
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Abrir KP Manager", true, None::<&str>)?;
-    let lock = MenuItem::with_id(app, "lock", "Bloquear", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Cerrar KP Manager", true, None::<&str>)?;
+    let (l_open, l_lock, l_quit) = tray_labels("es");
+    let open = MenuItem::with_id(app, "open", l_open, true, None::<&str>)?;
+    let lock = MenuItem::with_id(app, "lock", l_lock, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", l_quit, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &lock, &quit])?;
+    // La interfaz fija el idioma real nada más arrancar (`set_tray_language`).
+    app.manage(TrayItems { open, lock, quit });
 
     let mut tray = TrayIconBuilder::new()
         .tooltip("KP Manager")
@@ -83,7 +110,7 @@ pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
 
 fn parse(s: &str) -> Result<Shortcut> {
     s.parse::<Shortcut>()
-        .map_err(|_| AppError::Invalid(format!("Atajo no válido: {s}")))
+        .map_err(|_| AppError::msg_arg("shortcutInvalid", s))
 }
 
 /// Registra `new` y libera `old`. Si `new` no se puede registrar (p. ej. lo usa otra app), se conserva `old`.
@@ -99,9 +126,7 @@ pub fn change_shortcut(app: &AppHandle, old: Option<&str>, new: Option<&str>) ->
             if let Some(o) = old_sc {
                 let _ = gs.register(o);
             }
-            return Err(AppError::Invalid(format!(
-                "No se pudo registrar el atajo (¿lo usa otra aplicación?): {e}"
-            )));
+            return Err(AppError::msg_arg("shortcutRegister", e.to_string()));
         }
     }
     Ok(())

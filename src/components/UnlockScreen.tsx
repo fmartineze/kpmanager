@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api, errMsg } from "../api";
 import { IconFingerprint, IconKey, IconLock, IconShield } from "./Icons";
 import { Alert } from "./ui";
+import { rich, useT } from "../i18n";
 
 interface Props {
   isNew: boolean;
@@ -24,6 +25,7 @@ function strength(pw: string): number {
 }
 
 export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
+  const t = useT();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [error, setError] = useState("");
@@ -47,7 +49,7 @@ export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
       await api.helloUnlock();
       onUnlocked();
     } catch (err) {
-      fail(`${errMsg(err)}. Introduce la contraseña maestra.`);
+      fail(t("unlock.helloFail", { err: errMsg(err) }));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -74,7 +76,7 @@ export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (isNew && pw !== pw2) return fail("Las contraseñas no coinciden");
+    if (isNew && pw !== pw2) return fail(t("unlock.mismatch"));
     setBusy(true);
     setError("");
     try {
@@ -97,19 +99,13 @@ export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
       <div className="shield-wrap">
         <div className="shield"><IconShield /></div>
       </div>
-      <span className="chip-lock"><IconLock className="s14" /> {isNew ? "Primer uso" : "Bloqueado"}</span>
-      <h1>{isNew ? "Crea tu contraseña maestra" : "Tus vaults, a un clic"}</h1>
-      <p className="lede">
-        {isNew ? (
-          <>Cifra la configuración y las credenciales guardadas. <strong>No se puede recuperar</strong> si la pierdes.</>
-        ) : (
-          <>Introduce la contraseña maestra para desbloquear <strong>KP Manager</strong>.</>
-        )}
-      </p>
+      <span className="chip-lock"><IconLock className="s14" /> {isNew ? t("unlock.chipNew") : t("unlock.chipLocked")}</span>
+      <h1>{isNew ? t("unlock.titleNew") : t("unlock.titleLocked")}</h1>
+      <p className="lede">{rich(t(isNew ? "unlock.ledeNew" : "unlock.ledeLocked"))}</p>
 
       <form className={`form ${shake ? "shake" : ""}`} onSubmit={submit} onAnimationEnd={() => setShake(false)}>
         <div className="field">
-          <label className="label" htmlFor="pw">Contraseña maestra</label>
+          <label className="label" htmlFor="pw">{t("unlock.master")}</label>
           <div className={`input ${error && !mismatch ? "is-error" : ""}`}>
             <IconKey className="s16" />
             <input
@@ -118,34 +114,34 @@ export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
               type="password"
               autoFocus={!hello}
               autoComplete="off"
-              placeholder="Contraseña maestra"
+              placeholder={t("unlock.master")}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
             />
           </div>
           {isNew && (
-            <div className="meter" aria-label={`Fortaleza ${score} de 4`}>
+            <div className="meter" aria-label={t("unlock.strength", { n: score })}>
               {[0, 1, 2, 3].map((i) => <b key={i} className={i < score ? "on" : ""} />)}
             </div>
           )}
         </div>
         {isNew && (
           <div className="field">
-            <label className="label" htmlFor="pw2">Repite la contraseña</label>
+            <label className="label" htmlFor="pw2">{t("unlock.repeat")}</label>
             <div className={`input ${mismatch ? "is-error" : ""}`}>
               <IconKey className="s16" />
-              <input id="pw2" className="input-el" type="password" autoComplete="off" placeholder="Repite la contraseña" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+              <input id="pw2" className="input-el" type="password" autoComplete="off" placeholder={t("unlock.repeat")} value={pw2} onChange={(e) => setPw2(e.target.value)} />
             </div>
           </div>
         )}
         {error && <Alert kind="err">{error}</Alert>}
         <button className="btn btn-primary btn-block" disabled={busy || !pw}>
           {busy && <span className="spin" />}
-          {busy ? "Procesando…" : isNew ? "Crear y entrar" : "Desbloquear"}
+          {busy ? t("unlock.busy") : isNew ? t("unlock.create") : t("unlock.unlock")}
         </button>
         {hello && !isNew && (
           <button type="button" className="btn btn-secondary btn-block" disabled={busy} onClick={useHello}>
-            <IconFingerprint /> Usar Windows Hello
+            <IconFingerprint /> {t("unlock.hello")}
           </button>
         )}
       </form>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, Candidate, errMsg } from "../api";
+import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconFolder } from "./Icons";
 import { Alert, Box, Note } from "./ui";
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function ScanDialog({ onClose, onImported, rescan }: Props) {
+  const t = useT();
   const [root, setRoot] = useState(rescan ?? "");
   const [found, setFound] = useState<Candidate[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -78,32 +80,32 @@ export function ScanDialog({ onClose, onImported, rescan }: Props) {
   const footer = (
     <>
       <span className="grow" />
-      <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+      <button className="btn btn-ghost" onClick={onClose}>{t("common.cancel")}</button>
       <button
         className="btn btn-primary"
         disabled={!found || watch === null || (selected.size === 0 && !watch)}
         onClick={importSelected}
       >
-        {selected.size ? `Añadir ${selected.size}` : "Guardar"}
+        {selected.size ? t("scan.add", { n: selected.size }) : t("common.save")}
       </button>
     </>
   );
 
   return (
     <Modal
-      title={rescan ? "Re-escanear carpeta" : "Añadir carpeta"}
-      subtitle="Busca ficheros .kdbx de forma recursiva."
+      title={rescan ? t("scan.titleRescan") : t("scan.titleAdd")}
+      subtitle={t("scan.sub")}
       icon={<IconFolder className="s16" />}
       onClose={onClose}
       footer={footer}
     >
-      <Note>El nombre del cliente será el de la carpeta que contiene cada fichero.</Note>
+      <Note>{t("scan.note")}</Note>
       <div className="input-row">
-        <div className="input"><input className="input-el mono" readOnly value={root} placeholder="Ninguna carpeta seleccionada" /></div>
+        <div className="input"><input className="input-el mono" readOnly value={root} placeholder={t("scan.noFolder")} /></div>
         {rescan ? (
-          <button className="btn btn-secondary" onClick={() => scan(rescan)} disabled={busy}>Reintentar</button>
+          <button className="btn btn-secondary" onClick={() => scan(rescan)} disabled={busy}>{t("common.retry")}</button>
         ) : (
-          <button className="btn btn-secondary" onClick={choose} disabled={busy}>Elegir</button>
+          <button className="btn btn-secondary" onClick={choose} disabled={busy}>{t("common.choose")}</button>
         )}
       </div>
       {busy && (
@@ -118,9 +120,9 @@ export function ScanDialog({ onClose, onImported, rescan }: Props) {
       {found && !busy && (
         <div className="results">
           <div className="results-head">
-            <span>{found.length} {found.length === 1 ? "vault encontrado" : "vaults encontrados"}</span>
+            <span>{t(found.length === 1 ? "scan.foundOne" : "scan.foundMany", { n: found.length })}</span>
             {selectable.length > 0 && (
-              <button className="btn btn-link" onClick={toggleAll}>{allOn ? "Ninguno" : "Todos"}</button>
+              <button className="btn btn-link" onClick={toggleAll}>{allOn ? t("common.none") : t("common.all")}</button>
             )}
           </div>
           <div className="results-list">
@@ -132,8 +134,8 @@ export function ScanDialog({ onClose, onImported, rescan }: Props) {
                   <span className="res-name">{c.client}</span>
                   <span className="res-path" title={c.path}>{c.path}</span>
                 </span>
-                {c.already && <span className="badge badge-neutral">ya añadido</span>}
-                {c.ignored && <span className="badge badge-neutral">descartado antes</span>}
+                {c.already && <span className="badge badge-neutral">{t("scan.already")}</span>}
+                {c.ignored && <span className="badge badge-neutral">{t("scan.ignored")}</span>}
               </label>
             ))}
           </div>
@@ -142,24 +144,21 @@ export function ScanDialog({ onClose, onImported, rescan }: Props) {
 
       {found && !busy && !rescan && (
         <fieldset className="choice">
-          <legend>¿Poner esta carpeta en seguimiento?</legend>
+          <legend>{t("scan.watchQ")}</legend>
           <label className={`choice-card ${watch === true ? "on" : ""}`}>
             <input type="radio" className="sr" name="watch" checked={watch === true} onChange={() => setWatch(true)} />
             <span className="radio" />
             <span className="txt">
-              <strong>Sí, mantenerla en seguimiento</strong>
-              <small>
-                Cada vez que abras la app (y al volver a ella) se revisa la carpeta. Si aparece un .kdbx nuevo te
-                preguntaré si añadirlo, y si uno registrado ya no existe, si quitarlo de la lista.
-              </small>
+              <strong>{t("scan.watchYes")}</strong>
+              <small>{t("scan.watchYesDesc")}</small>
             </span>
           </label>
           <label className={`choice-card ${watch === false ? "on" : ""}`}>
             <input type="radio" className="sr" name="watch" checked={watch === false} onChange={() => setWatch(false)} />
             <span className="radio" />
             <span className="txt">
-              <strong>No, solo importar ahora</strong>
-              <small>Se añaden los vaults seleccionados y no se vuelve a mirar la carpeta.</small>
+              <strong>{t("scan.watchNo")}</strong>
+              <small>{t("scan.watchNoDesc")}</small>
             </span>
           </label>
         </fieldset>

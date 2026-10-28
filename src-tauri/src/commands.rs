@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 use crate::error::{AppError, Result};
 use crate::hello::{self, Hello};
 use crate::keepass;
-use crate::prefs::{Prefs, PrefsState};
+use crate::prefs::{LANGUAGES, Prefs, PrefsState, THEMES};
 use crate::shell;
 use crate::model::{Executable, Vault};
 use crate::scan::{self, Candidate, is_under, path_key};
@@ -55,7 +55,7 @@ pub struct VaultInput {
 impl VaultInput {
     fn validate(&self) -> Result<()> {
         if self.client.trim().is_empty() || self.path.trim().is_empty() {
-            return Err(AppError::Invalid("Cliente y ruta son obligatorios".into()));
+            return Err(AppError::msg("clientPathRequired"));
         }
         Ok(())
     }
@@ -159,7 +159,7 @@ pub async fn hello_unlock(store: State<'_, Store>, hello: State<'_, Hello>) -> R
     match store.unlock(&password) {
         Err(AppError::WrongPassword) => {
             hello.disable();
-            Err(AppError::Invalid("La contraseña maestra guardada ya no es válida. Usa la contraseña".into()))
+            Err(AppError::msg("helloStaleMaster"))
         }
         other => other,
     }
@@ -211,7 +211,7 @@ pub async fn scan_folder(store: State<'_, Store>, path: String) -> Result<Vec<Ca
     })?;
     let root = PathBuf::from(path);
     if !root.is_dir() {
-        return Err(AppError::Invalid("La carpeta no existe".into()));
+        return Err(AppError::msg("folderMissing"));
     }
     // Escaneo completo: devuelve también los descartados, marcados para que la UI los distinga.
     let mut found = scan::scan_dir(&root, &existing);
@@ -279,20 +279,37 @@ pub fn get_prefs(prefs: State<PrefsState>) -> Prefs {
     prefs.get()
 }
 
-#[tauri::command]
-pub fn set_prefs(
-    prefs: State<PrefsState>,
+/// Preferencias editables desde Ajustes (el atajo global tiene su propio comando).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrefsUpdate {
     minimize_to_tray: bool,
     close_to_tray: bool,
     lock_on_hide: bool,
     sort_by_name: bool,
-) -> Result<Prefs> {
+    theme: String,
+    language: String,
+}
+
+#[tauri::command]
+pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs> {
+    // Un valor desconocido (fichero editado a mano, versión futura) vuelve al predeterminado.
+    let theme = if THEMES.contains(&update.theme.as_str()) { update.theme } else { "system".into() };
+    let language = if LANGUAGES.contains(&update.language.as_str()) { update.language } else { "auto".into() };
     prefs.update(|p| {
-        p.minimize_to_tray = minimize_to_tray;
-        p.close_to_tray = close_to_tray;
-        p.lock_on_hide = lock_on_hide;
-        p.sort_by_name = sort_by_name;
+        p.minimize_to_tray = update.minimize_to_tray;
+        p.close_to_tray = update.close_to_tray;
+        p.lock_on_hide = update.lock_on_hide;
+        p.sort_by_name = update.sort_by_name;
+        p.theme = theme;
+        p.language = language;
     })
+}
+
+/// Idioma ya resuelto por la interfaz (`es` | `en`) para los textos nativos: menú de la bandeja.
+#[tauri::command]
+pub fn set_tray_language(app: tauri::AppHandle, language: String) {
+    shell::set_tray_language(&app, &language);
 }
 
 /// `None` o vacío quita el atajo global. Si no se puede registrar, el anterior se conserva.
@@ -319,7 +336,7 @@ pub fn set_default_keyfile(store: State<Store>, path: Option<String>) -> Result<
         Some(p) => {
             let p = PathBuf::from(p.trim());
             if !p.is_file() {
-                return Err(AppError::Invalid("La keyfile no existe".into()));
+                return Err(AppError::msg("keyfileMissing"));
             }
             Some(p)
         }
@@ -339,7 +356,7 @@ pub fn set_keepassxc_path(store: State<Store>, path: Option<String>) -> Result<S
         Some(p) => {
             let p = PathBuf::from(p.trim());
             if !p.is_file() {
-                return Err(AppError::Invalid("El ejecutable no existe".into()));
+                return Err(AppError::msg("exeMissing"));
             }
             Some(Executable::from_program(p))
         }
@@ -419,7 +436,7 @@ pub fn clear_ignored(store: State<Store>) -> Result<()> {
 pub fn add_watched(store: State<Store>, path: String) -> Result<()> {
     let p = PathBuf::from(path);
     if !p.is_dir() {
-        return Err(AppError::Invalid("La carpeta no existe".into()));
+        return Err(AppError::msg("folderMissing"));
     }
     store.write(|d| {
         if !d.watched.iter().any(|w| path_key(w) == path_key(&p)) {

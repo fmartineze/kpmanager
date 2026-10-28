@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { errorText, type Lang, type LangPref } from "./i18n";
+import type { ThemePref } from "./theme";
 
 export interface Vault {
   id: string;
@@ -36,7 +38,12 @@ export interface Prefs {
   closeToTray: boolean;
   lockOnHide: boolean;
   sortByName: boolean;
+  theme: ThemePref;
+  language: LangPref;
 }
+
+/** Lo que se edita desde Ajustes (el atajo global tiene su propio comando). */
+export type PrefsUpdate = Omit<Prefs, "shortcut">;
 
 export interface HelloStatus {
   supported: boolean;
@@ -83,8 +90,8 @@ export const api = {
     invoke<number>("import_candidates", { items }),
   setFavorite: (id: string, favorite: boolean) => invoke<void>("set_favorite", { id, favorite }),
   getPrefs: () => invoke<Prefs>("get_prefs"),
-  setPrefs: (minimizeToTray: boolean, closeToTray: boolean, lockOnHide: boolean, sortByName: boolean) =>
-    invoke<Prefs>("set_prefs", { minimizeToTray, closeToTray, lockOnHide, sortByName }),
+  setPrefs: (update: PrefsUpdate) => invoke<Prefs>("set_prefs", { update }),
+  setTrayLanguage: (language: Lang) => invoke<void>("set_tray_language", { language }),
   setShortcut: (shortcut: string | null) => invoke<Prefs>("set_shortcut", { shortcut }),
   openVault: (id: string) => invoke<void>("open_vault", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
@@ -100,4 +107,4 @@ export const api = {
   deleteVaults: (ids: string[]) => invoke<number>("delete_vaults", { ids }),
 };
 
-export const errMsg = (e: unknown) => (typeof e === "string" ? e : String(e));
+export const errMsg = errorText;

@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, errMsg, HelloStatus, Prefs } from "../api";
+import { api, errMsg, HelloStatus, Prefs, PrefsUpdate } from "../api";
+import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconFingerprint, IconKey, IconSettings } from "./Icons";
-import { Alert, Check } from "./ui";
+import { Alert, Check, Segmented } from "./ui";
 import { comboFromEvent, DEFAULT_SHORTCUT } from "../shortcut";
 
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
+interface Props {
+  onClose: () => void;
+  /** El tema y el idioma se aplican en cuanto cambian, sin esperar a cerrar. */
+  onPrefs: (p: Prefs) => void;
+}
+
+export function SettingsDialog({ onClose, onPrefs }: Props) {
+  const t = useT();
   const [exe, setExe] = useState("");
   const [keyfile, setKeyfile] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -43,14 +51,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     run(async () => {
       const s = await api.setKeepassxcPath(exe || null);
       setExe(s.keepassxcPath ?? "");
-      setMsg(s.keepassxcPath ? "Ruta guardada" : "Ruta manual eliminada: se usará la autodetección");
+      setMsg(s.keepassxcPath ? t("settings.exeSaved") : t("settings.exeCleared"));
     });
 
   const detect = () =>
     run(async () => {
       const s = await api.detectKeepassxc();
       setExe(s.keepassxcPath ?? "");
-      setMsg("KeePassXC detectado");
+      setMsg(t("settings.detected"));
     });
 
   const browse = async () => {
@@ -67,14 +75,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     run(async () => {
       const s = await api.setDefaultKeyfile(value || null);
       setKeyfile(s.defaultKeyfile ?? "");
-      setMsg(s.defaultKeyfile ? "Keyfile predeterminada guardada" : "Keyfile predeterminada eliminada");
+      setMsg(s.defaultKeyfile ? t("settings.keyfileSaved") : t("settings.keyfileCleared"));
     });
 
-  const changePrefs = (patch: Partial<Pick<Prefs, "minimizeToTray" | "closeToTray" | "lockOnHide" | "sortByName">>) =>
+  const changePrefs = (patch: Partial<PrefsUpdate>) =>
     run(async () => {
       if (!prefs) return;
-      const next = { ...prefs, ...patch };
-      setPrefs(await api.setPrefs(next.minimizeToTray, next.closeToTray, next.lockOnHide, next.sortByName));
+      const { shortcut: _s, ...current } = prefs;
+      const next = await api.setPrefs({ ...current, ...patch });
+      setPrefs(next);
+      onPrefs(next);
     });
 
   const saveShortcut = (value: string | null) =>
@@ -82,7 +92,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       const p = await api.setShortcut(value);
       setPrefs(p);
       setCombo(p.shortcut ?? "");
-      setMsg(p.shortcut ? `Atajo global: ${p.shortcut}` : "Atajo global desactivado");
+      setMsg(p.shortcut ? t("settings.shortcutSet", { key: p.shortcut }) : t("settings.shortcutOff"));
     });
 
   const captureKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -97,119 +107,147 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       await api.helloEnable(helloPw);
       setHelloPw("");
       setHello(await api.helloStatus());
-      setMsg("Windows Hello activado");
+      setMsg(t("settings.helloEnabled"));
     });
 
   const disableHello = () =>
     run(async () => {
       await api.helloDisable();
       setHello(await api.helloStatus());
-      setMsg("Windows Hello desactivado");
+      setMsg(t("settings.helloDisabled"));
     });
 
   const changePw = () =>
     run(async () => {
       await api.changeMasterPassword(newPw);
       setNewPw("");
-      setMsg(hello?.enabled ? "Contraseña maestra cambiada. Windows Hello se ha desactivado: vuelve a activarlo" : "Contraseña maestra cambiada");
+      setMsg(hello?.enabled ? t("settings.masterChangedHello") : t("settings.masterChanged"));
       setHello(await api.helloStatus());
     });
 
   return (
     <Modal
-      title="Ajustes"
+      title={t("settings.title")}
       icon={<IconSettings className="s16" />}
       onClose={onClose}
-      footer={<><span className="grow" /><button className="btn btn-primary" onClick={onClose}>Listo</button></>}
+      footer={<><span className="grow" /><button className="btn btn-primary" onClick={onClose}>{t("common.done")}</button></>}
     >
       <div className="section">
-        <span className="section-title">KeePassXC</span>
+        <span className="section-title">{t("settings.appearance")}</span>
         <div className="field">
-          <label className="label" htmlFor="s-exe">Ejecutable</label>
-          <div className="input-row">
-            <div className="input"><input id="s-exe" className="input-el mono" value={exe} onChange={(e) => setExe(e.target.value)} placeholder="Autodetección" /></div>
-            <button className="btn btn-secondary" onClick={browse}>Examinar</button>
-          </div>
+          <span className="label">{t("settings.theme")}</span>
+          <Segmented
+            label={t("settings.theme")}
+            value={prefs?.theme ?? "system"}
+            onChange={(theme) => changePrefs({ theme })}
+            options={[
+              { value: "system", label: t("settings.themeSystem") },
+              { value: "light", label: t("settings.themeLight") },
+              { value: "dark", label: t("settings.themeDark") },
+            ]}
+          />
         </div>
-        <div className="btns">
-          <button className="btn btn-secondary btn-sm" onClick={detect}>Detectar automáticamente</button>
-          <button className="btn btn-ghost btn-sm" onClick={save}>Guardar ruta</button>
+        <div className="field">
+          <span className="label">{t("settings.language")}</span>
+          <Segmented
+            label={t("settings.language")}
+            value={prefs?.language ?? "auto"}
+            onChange={(language) => changePrefs({ language })}
+            options={[
+              { value: "auto", label: t("settings.langAuto") },
+              { value: "es", label: t("settings.langEs") },
+              { value: "en", label: t("settings.langEn") },
+            ]}
+          />
         </div>
       </div>
 
       <div className="section">
-        <span className="section-title">Acceso rápido</span>
+        <span className="section-title">{t("settings.keepass")}</span>
         <div className="field">
-          <label className="label" htmlFor="s-sc">Atajo global para abrir la app</label>
+          <label className="label" htmlFor="s-exe">{t("settings.exe")}</label>
+          <div className="input-row">
+            <div className="input"><input id="s-exe" className="input-el mono" value={exe} onChange={(e) => setExe(e.target.value)} placeholder={t("settings.autodetect")} /></div>
+            <button className="btn btn-secondary" onClick={browse}>{t("common.browse")}</button>
+          </div>
+        </div>
+        <div className="btns">
+          <button className="btn btn-secondary btn-sm" onClick={detect}>{t("settings.detect")}</button>
+          <button className="btn btn-ghost btn-sm" onClick={save}>{t("settings.saveExe")}</button>
+        </div>
+      </div>
+
+      <div className="section">
+        <span className="section-title">{t("settings.quick")}</span>
+        <div className="field">
+          <label className="label" htmlFor="s-sc">{t("settings.shortcut")}</label>
           <div className="input capture">
             <input
               id="s-sc"
               className="input-el mono"
               readOnly
               value={combo}
-              placeholder="Pulsa la combinación…"
+              placeholder={t("settings.shortcutPh")}
               onKeyDown={captureKey}
             />
           </div>
-          <div className="help">Haz clic en el campo y pulsa la combinación (con Ctrl, Alt, Mayús o Win). Funciona desde cualquier aplicación.</div>
+          <div className="help">{t("settings.shortcutHelp")}</div>
         </div>
         <div className="btns">
-          <button className="btn btn-secondary btn-sm" onClick={() => saveShortcut(combo || null)} disabled={combo === (prefs?.shortcut ?? "")}>Guardar atajo</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(DEFAULT_SHORTCUT)}>Restablecer</button>
-          {prefs?.shortcut && <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(null)}>Quitar</button>}
+          <button className="btn btn-secondary btn-sm" onClick={() => saveShortcut(combo || null)} disabled={combo === (prefs?.shortcut ?? "")}>{t("settings.saveShortcut")}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(DEFAULT_SHORTCUT)}>{t("settings.reset")}</button>
+          {prefs?.shortcut && <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(null)}>{t("common.remove")}</button>}
         </div>
       </div>
 
       <div className="section">
-        <span className="section-title">Ventana y lista</span>
+        <span className="section-title">{t("settings.window")}</span>
         <Check checked={!!prefs?.minimizeToTray} onChange={(v) => changePrefs({ minimizeToTray: v })}>
-          Minimizar a la bandeja del sistema
+          {t("settings.minTray")}
         </Check>
         <Check checked={!!prefs?.closeToTray} onChange={(v) => changePrefs({ closeToTray: v })}>
-          Cerrar a la bandeja (la app sigue disponible con el atajo)
+          {t("settings.closeTray")}
         </Check>
         <Check checked={!!prefs?.lockOnHide} onChange={(v) => changePrefs({ lockOnHide: v })}>
-          Bloquear al ocultar la ventana en la bandeja
+          {t("settings.lockHide")}
         </Check>
-        {prefs?.closeToTray && (
-          <div className="help">Para cerrarla del todo: clic derecho en el icono de la bandeja → «Cerrar KP Manager».</div>
-        )}
+        {prefs?.closeToTray && <div className="help">{t("settings.trayHelp")}</div>}
         <Check checked={!prefs?.sortByName} onChange={(v) => changePrefs({ sortByName: !v })}>
-          Ordenar por último uso (si no, alfabético). Los favoritos van siempre arriba.
+          {t("settings.sortRecent")}
         </Check>
       </div>
 
       <div className="section">
-        <span className="section-title">Keyfile predeterminada</span>
-        <div className="help">Se rellena al crear un vault y se ofrece al editar los que no la usan.</div>
+        <span className="section-title">{t("settings.keyfile")}</span>
+        <div className="help">{t("settings.keyfileHelp")}</div>
         <div className="input-row">
-          <div className="input"><input className="input-el mono" value={keyfile} onChange={(e) => setKeyfile(e.target.value)} placeholder="Ninguna" /></div>
-          <button className="btn btn-secondary" onClick={browseKeyfile}>Examinar</button>
+          <div className="input"><input className="input-el mono" value={keyfile} onChange={(e) => setKeyfile(e.target.value)} placeholder={t("settings.keyfileNone")} /></div>
+          <button className="btn btn-secondary" onClick={browseKeyfile}>{t("common.browse")}</button>
         </div>
         <div className="btns">
-          <button className="btn btn-secondary btn-sm" onClick={() => saveKeyfile(keyfile)}>Guardar</button>
-          {keyfile && <button className="btn btn-ghost btn-sm" onClick={() => saveKeyfile("")}>Quitar</button>}
+          <button className="btn btn-secondary btn-sm" onClick={() => saveKeyfile(keyfile)}>{t("common.save")}</button>
+          {keyfile && <button className="btn btn-ghost btn-sm" onClick={() => saveKeyfile("")}>{t("common.remove")}</button>}
         </div>
       </div>
 
       {hello?.supported && (
         <div className="section">
-          <span className="section-title">Windows Hello</span>
+          <span className="section-title">{t("settings.hello")}</span>
           {hello.enabled ? (
             <div className="hello-row">
-              <span className="badge badge-ok"><span className="dot" /> Activado</span>
-              <span className="help">Se usa al iniciar; si falla, se pide la contraseña.</span>
-              <button className="btn btn-ghost btn-sm" onClick={disableHello}>Desactivar</button>
+              <span className="badge badge-ok"><span className="dot" /> {t("settings.helloOn")}</span>
+              <span className="help">{t("settings.helloOnHelp")}</span>
+              <button className="btn btn-ghost btn-sm" onClick={disableHello}>{t("settings.disable")}</button>
             </div>
           ) : (
             <>
-              <div className="help">Desbloquea con tu huella, rostro o PIN. Confirma tu contraseña maestra para activarlo.</div>
+              <div className="help">{t("settings.helloHelp")}</div>
               <div className="input-row">
                 <div className="input">
                   <IconKey className="s16" />
-                  <input className="input-el" type="password" autoComplete="off" value={helloPw} onChange={(e) => setHelloPw(e.target.value)} placeholder="Contraseña maestra" />
+                  <input className="input-el" type="password" autoComplete="off" value={helloPw} onChange={(e) => setHelloPw(e.target.value)} placeholder={t("settings.master")} />
                 </div>
-                <button className="btn btn-secondary" onClick={enableHello} disabled={!helloPw}><IconFingerprint className="s16" /> Activar</button>
+                <button className="btn btn-secondary" onClick={enableHello} disabled={!helloPw}><IconFingerprint className="s16" /> {t("settings.enable")}</button>
               </div>
             </>
           )}
@@ -217,13 +255,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       )}
 
       <div className="section">
-        <span className="section-title">Contraseña maestra</span>
+        <span className="section-title">{t("settings.master")}</span>
         <div className="input-row">
           <div className="input">
             <IconKey className="s16" />
-            <input className="input-el" type="password" autoComplete="off" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Nueva contraseña maestra" />
+            <input className="input-el" type="password" autoComplete="off" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t("settings.newMaster")} />
           </div>
-          <button className="btn btn-secondary" onClick={changePw} disabled={!newPw}>Cambiar</button>
+          <button className="btn btn-secondary" onClick={changePw} disabled={!newPw}>{t("settings.change")}</button>
         </div>
       </div>
 

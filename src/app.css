@@ -59,3 +59,12 @@ button { font-family: inherit; }
 
 /* El cuerpo del modal hace scroll: sus bloques no deben comprimirse para caber (la lista de resultados se aplastaba) */
 .modal-body > * { flex-shrink: 0; }
+
+/* Selector segmentado (tema, idioma) */
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: var(--kp-radius-md); background: var(--kp-surface-2); border: 1px solid var(--kp-border-soft); }
+.seg-btn { flex: 1; height: 32px; padding: 0 10px; border: 0; border-radius: var(--kp-radius-sm); background: transparent; color: var(--kp-text-2);
+  font: inherit; font-size: var(--kp-fs-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--kp-dur-fast) var(--kp-ease-out), color var(--kp-dur-fast), box-shadow var(--kp-dur-base) var(--kp-ease-out); }
+.seg-btn:hover { color: var(--kp-text); }
+.seg-btn.on { background: var(--kp-accent-grad); color: #fff; box-shadow: var(--kp-shadow-accent-sm), var(--kp-highlight); }
+.seg-btn:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--kp-bg), 0 0 0 4px var(--kp-accent); }

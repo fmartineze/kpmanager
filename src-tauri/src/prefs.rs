@@ -24,11 +24,26 @@ pub struct Prefs {
     pub lock_on_hide: bool,
     /// Alfabético; si es `false`, por último uso.
     pub sort_by_name: bool,
+    /// `system` | `light` | `dark`.
+    pub theme: String,
+    /// `auto` (el del sistema) | `es` | `en`.
+    pub language: String,
 }
+
+pub const THEMES: [&str; 3] = ["system", "light", "dark"];
+pub const LANGUAGES: [&str; 3] = ["auto", "es", "en"];
 
 impl Default for Prefs {
     fn default() -> Self {
-        Self { shortcut: Some(DEFAULT_SHORTCUT.into()), minimize_to_tray: false, close_to_tray: true, lock_on_hide: false, sort_by_name: false }
+        Self {
+            shortcut: Some(DEFAULT_SHORTCUT.into()),
+            minimize_to_tray: false,
+            close_to_tray: true,
+            lock_on_hide: false,
+            sort_by_name: false,
+            theme: "system".into(),
+            language: "auto".into(),
+        }
     }
 }
 
@@ -94,6 +109,7 @@ mod tests {
         let p = PrefsState::load(path.clone()).get();
         assert!(p.minimize_to_tray);
         assert!(p.close_to_tray, "un fichero antiguo sin el campo usa el valor por defecto");
+        assert_eq!((p.theme.as_str(), p.language.as_str()), ("system", "auto"));
         assert_eq!(p.shortcut.as_deref(), Some(DEFAULT_SHORTCUT));
         fs::write(&path, b"{{no es json").unwrap();
         assert_eq!(PrefsState::load(path).get(), Prefs::default());

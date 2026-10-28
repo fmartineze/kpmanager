@@ -1,6 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { api, errMsg, HelloStatus, Prefs, SyncReport, Vault } from "./api";
 import { listen } from "@tauri-apps/api/event";
+import { rich, setLanguagePref, translate, useLang, useT } from "./i18n";
+import { setThemePref } from "./theme";
 import { SyncDialog } from "./components/SyncDialog";
 import { WatchDialog } from "./components/WatchDialog";
 import { UnlockScreen } from "./components/UnlockScreen";
@@ -22,14 +24,15 @@ type Dialog = null | { kind: "form"; vault: Vault | null } | { kind: "scan"; res
 type Toast = { msg: string; kind: "ok" | "error"; key: number } | null;
 
 function Titlebar() {
+  const t = useT();
   const win = getCurrentWindow();
   return (
     <div className="titlebar" data-tauri-drag-region>
       <span className="tb-mark"><IconShield className="s14" /></span>
       <span>KP Manager</span>
       <span className="grow" />
-      <button className="tb-btn" onClick={() => win.minimize()} aria-label="Minimizar"><IconMinus className="s14" /></button>
-      <button className="tb-btn close" onClick={() => win.close()} aria-label="Cerrar"><IconX className="s14" /></button>
+      <button className="tb-btn" onClick={() => win.minimize()} aria-label={t("app.minimize")}><IconMinus className="s14" /></button>
+      <button className="tb-btn close" onClick={() => win.close()} aria-label={t("app.close")}><IconX className="s14" /></button>
     </div>
   );
 }
@@ -42,6 +45,8 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
 );
 
 export default function App() {
+  const t = useT();
+  const lang = useLang();
   const [phase, setPhase] = useState<"loading" | "locked" | "ready">("loading");
   const [isNew, setIsNew] = useState(false);
   const [vaults, setVaults] = useState<Vault[]>([]);
@@ -52,12 +57,29 @@ export default function App() {
   const [hello, setHello] = useState<HelloStatus>({ supported: false, enabled: false });
   // Tras bloquear a mano no se lanza Windows Hello solo; en el arranque y el bloqueo por inactividad sí.
   const [autoHello, setAutoHello] = useState(true);
-  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false });
+  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto" });
   // Fila resaltada para abrir con Enter; solo se muestra al buscar o tras usar las flechas.
   const [cursor, setCursor] = useState(0);
   const [navigated, setNavigated] = useState(false);
   const deferred = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Las preferencias no son secretas y se leen aunque la app esté bloqueada: así la pantalla de
+  // desbloqueo ya sale con el tema y el idioma elegidos.
+  const applyPrefs = useCallback((p: Prefs) => {
+    setPrefs(p);
+    setThemePref(p.theme);
+    setLanguagePref(p.language);
+  }, []);
+
+  useEffect(() => {
+    api.getPrefs().then(applyPrefs).catch(() => {});
+  }, [applyPrefs]);
+
+  // El menú de la bandeja lo pinta el sistema: hay que decirle el idioma ya resuelto.
+  useEffect(() => {
+    api.setTrayLanguage(lang).catch(() => {});
+  }, [lang]);
 
   const showToast = useCallback((msg: string, kind: "ok" | "error" = "ok") => {
     const key = Date.now();
@@ -75,8 +97,8 @@ export default function App() {
       try {
         const r = await api.checkWatched();
         if (r.new.length || r.missing.length) setDialog((d) => d ?? { kind: "sync", report: r });
-        else if (!silent) showToast("Carpetas en seguimiento sin cambios");
-        if (r.unreachable.length && !silent) showToast(`Carpeta no accesible: ${r.unreachable[0]}`, "error");
+        else if (!silent) showToast(translate("toast.noChanges"));
+        if (r.unreachable.length && !silent) showToast(translate("toast.unreachable", { path: r.unreachable[0] }), "error");
       } catch {
         /* bloqueada u otro error transitorio: se reintenta en la siguiente revisión */
       }
@@ -144,8 +166,8 @@ export default function App() {
 
   // Preferencias (orden, atajo…): se recargan al desbloquear y al cerrar un diálogo (p. ej. Ajustes).
   useEffect(() => {
-    if (phase === "ready" && !dialog) api.getPrefs().then(setPrefs).catch(() => {});
-  }, [phase, dialog]);
+    if (phase === "ready" && !dialog) api.getPrefs().then(applyPrefs).catch(() => {});
+  }, [phase, dialog, applyPrefs]);
 
   // El foco vive en el buscador siempre que se ve la pantalla principal sin diálogos.
   useEffect(() => {
@@ -271,33 +293,33 @@ export default function App() {
             className="input-el"
             type="text"
             autoFocus
-            placeholder="Buscar cliente…"
+            placeholder={t("search.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onSearchKey}
           />
           {query ? (
-            <button className="clear" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><IconX className="s14" /></button>
+            <button className="clear" onClick={() => setQuery("")} aria-label={t("search.clear")}><IconX className="s14" /></button>
           ) : (
             <span className="hint">Ctrl F</span>
           )}
         </div>
         <div className="meta">
           <span className="count">
-            {q ? <><b>{filtered.length}</b> de {vaults.length}</> : <><b>{vaults.length}</b> {vaults.length === 1 ? "cliente" : "clientes"}</>}
+            {q ? <>{rich(t("count.of", { n: `<b>${filtered.length}</b>`, total: vaults.length }))}</> : <>{rich(t(vaults.length === 1 ? "count.client" : "count.clients", { n: `<b>${vaults.length}</b>` }))}</>}
           </span>
           <div className="actions">
-            <button className="btn btn-icon accent" aria-label="Añadir vault" onClick={() => setDialog({ kind: "form", vault: null })}>
-              <IconPlus /><span className="tip">Añadir vault</span>
+            <button className="btn btn-icon accent" aria-label={t("tip.add")} onClick={() => setDialog({ kind: "form", vault: null })}>
+              <IconPlus /><span className="tip">{t("tip.add")}</span>
             </button>
-            <button className="btn btn-icon" aria-label="Carpetas" onClick={() => setDialog({ kind: "watch" })}>
-              <IconFolder /><span className="tip">Carpetas</span>
+            <button className="btn btn-icon" aria-label={t("tip.folders")} onClick={() => setDialog({ kind: "watch" })}>
+              <IconFolder /><span className="tip">{t("tip.folders")}</span>
             </button>
-            <button className="btn btn-icon" aria-label="Ajustes" onClick={() => setDialog({ kind: "settings" })}>
-              <IconSettings /><span className="tip end">Ajustes</span>
+            <button className="btn btn-icon" aria-label={t("tip.settings")} onClick={() => setDialog({ kind: "settings" })}>
+              <IconSettings /><span className="tip end">{t("tip.settings")}</span>
             </button>
-            <button className="btn btn-icon" aria-label="Bloquear" onClick={() => lock(true)}>
-              <IconLock /><span className="tip end">Bloquear</span>
+            <button className="btn btn-icon" aria-label={t("tip.lock")} onClick={() => lock(true)}>
+              <IconLock /><span className="tip end">{t("tip.lock")}</span>
             </button>
           </div>
         </div>
@@ -322,7 +344,7 @@ export default function App() {
           rescan={dialog.rescan}
           onClose={() => setDialog(null)}
           onImported={async () => {
-            await saved("Vaults importados");
+            await saved(t("toast.imported"));
           }}
         />
       )}
@@ -338,14 +360,14 @@ export default function App() {
         />
       )}
       {dialog?.kind === "sync" && <SyncDialog report={dialog.report} onClose={() => setDialog(null)} onDone={saved} />}
-      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} onPrefs={applyPrefs} />}
 
       {toast && (
         <div className="toasts">
           <div key={toast.key} className={`toast ${toast.kind === "error" ? "err" : "ok"}`} role="status">
             <span className="toast-ic">{toast.kind === "error" ? <IconAlert className="s16" /> : <IconCheck className="s16" />}</span>
             <div className="toast-txt">{toast.msg}</div>
-            <button className="btn btn-icon plain" onClick={() => setToast(null)} aria-label="Cerrar aviso"><IconX className="s14" /></button>
+            <button className="btn btn-icon plain" onClick={() => setToast(null)} aria-label={t("toast.close")}><IconX className="s14" /></button>
             <span className="toast-timer" />
           </div>
         </div>

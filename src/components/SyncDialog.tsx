@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, errMsg, SyncReport } from "../api";
+import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconEye } from "./Icons";
 import { Alert, Box } from "./ui";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function SyncDialog({ report, onClose, onDone }: Props) {
+  const t = useT();
   const [add, setAdd] = useState(new Set(report.new.map((c) => c.path)));
   const [remove, setRemove] = useState(new Set(report.missing.map((v) => v.id)));
   const [error, setError] = useState("");
@@ -31,9 +33,9 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
       if (ignored.length) await api.ignorePaths(ignored);
       if (remove.size) await api.deleteVaults([...remove]);
       const parts = [];
-      if (toAdd.length) parts.push(`${toAdd.length} añadido(s)`);
-      if (remove.size) parts.push(`${remove.size} eliminado(s)`);
-      onDone(parts.join(", ") || "Sin cambios");
+      if (toAdd.length) parts.push(t("sync.added", { n: toAdd.length }));
+      if (remove.size) parts.push(t("sync.removed", { n: remove.size }));
+      onDone(parts.join(", ") || t("sync.noChange"));
     } catch (e) {
       setError(errMsg(e));
     }
@@ -42,23 +44,23 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
   const footer = (
     <>
       <span className="grow" />
-      <button className="btn btn-ghost" onClick={onClose}>Más tarde</button>
-      <button className="btn btn-primary" onClick={apply}>Aplicar</button>
+      <button className="btn btn-ghost" onClick={onClose}>{t("common.later")}</button>
+      <button className="btn btn-primary" onClick={apply}>{t("common.apply")}</button>
     </>
   );
 
   return (
     <Modal
-      title="Cambios detectados"
-      subtitle="En las carpetas en seguimiento."
+      title={t("sync.title")}
+      subtitle={t("sync.sub")}
       icon={<IconEye className="s16" />}
       onClose={onClose}
       footer={footer}
     >
       {report.new.length > 0 && (
         <div className="section">
-          <span className="section-title">Vaults nuevos</span>
-          <div className="help">Los que desmarques no se volverán a proponer.</div>
+          <span className="section-title">{t("sync.newTitle")}</span>
+          <div className="help">{t("sync.newHelp")}</div>
           <div className="results">
             <div className="results-list">
               {report.new.map((c) => (
@@ -77,8 +79,8 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
       )}
       {report.missing.length > 0 && (
         <div className="section">
-          <span className="section-title">Ya no existen en disco</span>
-          <div className="help">Marca los que quieras quitar de la lista.</div>
+          <span className="section-title">{t("sync.missingTitle")}</span>
+          <div className="help">{t("sync.missingHelp")}</div>
           <div className="results">
             <div className="results-list">
               {report.missing.map((v) => (

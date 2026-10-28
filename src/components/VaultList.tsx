@@ -1,5 +1,6 @@
-import { Vault } from "../api";
 import { useEffect } from "react";
+import { Vault } from "../api";
+import { useT } from "../i18n";
 import { IconCheck, IconEdit, IconFolder, IconPlus, IconSearch, IconStar } from "./Icons";
 
 export type OpenState = { id: string; phase: "opening" | "done" } | null;
@@ -24,6 +25,8 @@ const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 const hue = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6;
 
 export function VaultList({ vaults, total, query, opening, cursor, onToggleFavorite, onOpen, onEdit, onAdd, onFolders }: Props) {
+  const t = useT();
+
   // Mantiene visible la fila resaltada al moverse con las flechas.
   useEffect(() => {
     if (cursor >= 0) document.querySelector(`[data-idx="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
@@ -33,11 +36,11 @@ export function VaultList({ vaults, total, query, opening, cursor, onToggleFavor
     return (
       <div className="empty">
         <div className="empty-art"><IconFolder /></div>
-        <h2>Aún no hay vaults</h2>
-        <p>Añade un vault a mano o importa una carpeta con tus ficheros .kdbx; el cliente toma el nombre de la carpeta.</p>
+        <h2>{t("list.emptyTitle")}</h2>
+        <p>{t("list.emptyText")}</p>
         <div className="stack">
-          <button className="btn btn-primary" onClick={onAdd}><IconPlus /> Añadir vault</button>
-          <button className="btn btn-secondary" onClick={onFolders}><IconFolder /> Añadir carpeta</button>
+          <button className="btn btn-primary" onClick={onAdd}><IconPlus /> {t("list.addVault")}</button>
+          <button className="btn btn-secondary" onClick={onFolders}><IconFolder /> {t("list.addFolder")}</button>
         </div>
       </div>
     );
@@ -46,8 +49,8 @@ export function VaultList({ vaults, total, query, opening, cursor, onToggleFavor
     return (
       <div className="empty">
         <div className="empty-art neutral"><IconSearch /></div>
-        <h2>Sin resultados</h2>
-        <p>Ningún cliente coincide con «{query.trim()}».</p>
+        <h2>{t("list.noResults")}</h2>
+        <p>{t("list.noResultsText", { q: query.trim() })}</p>
       </div>
     );
   }
@@ -69,21 +72,21 @@ export function VaultList({ vaults, total, query, opening, cursor, onToggleFavor
               {phase && (
                 <span className={`row-status ${phase === "done" ? "ok" : ""}`}>
                   {phase === "opening" ? <span className="spin" /> : <IconCheck className="s14" />}
-                  {phase === "opening" ? "Abriendo…" : "Abierto"}
+                  {phase === "opening" ? t("list.opening") : t("list.opened")}
                 </span>
               )}
             </button>
             <button
               className={`row-edit fav ${v.favorite ? "on" : ""}`}
               onClick={() => onToggleFavorite(v)}
-              aria-label={v.favorite ? `Quitar ${v.client} de favoritos` : `Marcar ${v.client} como favorito`}
+              aria-label={v.favorite ? t("list.favRemove", { name: v.client }) : t("list.favAdd", { name: v.client })}
               aria-pressed={v.favorite}
-              title={v.favorite ? "Quitar de favoritos" : "Favorito"}
+              title={v.favorite ? t("list.favTitleOff") : t("list.favTitle")}
               disabled={!!opening}
             >
               <IconStar className="s16" />
             </button>
-            <button className="row-edit" onClick={() => onEdit(v)} aria-label={`Editar ${v.client}`} title="Editar" disabled={!!opening}>
+            <button className="row-edit" onClick={() => onEdit(v)} aria-label={t("list.editAria", { name: v.client })} title={t("list.edit")} disabled={!!opening}>
               <IconEdit className="s16" />
             </button>
             {phase === "opening" && <span className="row-progress" />}
