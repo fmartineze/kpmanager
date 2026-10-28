@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod crypto;
 mod error;
@@ -55,6 +56,8 @@ pub fn run() {
             commands::hello_enable,
             commands::hello_disable,
             commands::reset_data,
+            commands::export_config,
+            commands::import_config,
             commands::hello_unlock,
             commands::list_vaults,
             commands::add_vault,

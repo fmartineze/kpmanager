@@ -45,6 +45,14 @@ export interface Prefs {
 /** Lo que se edita desde Ajustes (el atajo global tiene su propio comando). */
 export type PrefsUpdate = Omit<Prefs, "shortcut">;
 
+export type ImportMode = "merge" | "replace";
+
+export interface ImportSummary {
+  vaults: number;
+  folders: number;
+  replaced: boolean;
+}
+
 export interface HelloStatus {
   supported: boolean;
   enabled: boolean;
@@ -81,6 +89,9 @@ export const api = {
   helloDisable: () => invoke<void>("hello_disable"),
   /** Borra todos los datos cifrados; la app vuelve al primer uso. */
   resetData: () => invoke<void>("reset_data"),
+  exportConfig: (path: string) => invoke<void>("export_config", { path }),
+  importConfig: (path: string, password: string, mode: ImportMode) =>
+    invoke<ImportSummary>("import_config", { path, password, mode }),
   helloUnlock: () => invoke<void>("hello_unlock"),
   changeMasterPassword: (password: string) => invoke<void>("change_master_password", { password }),
   listVaults: () => invoke<Vault[]>("list_vaults"),

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use zeroize::Zeroizing;
 
+use crate::backup;
+use crate::crypto::Keys;
 use crate::error::{AppError, Result};
 use crate::hello::{self, Hello};
 use crate::keepass;
@@ -564,4 +566,76 @@ mod tests {
         // Sin ignorados se proponen B y C.
         assert_eq!(sync_report(&[vault], &watched, &[]).new.len(), 2);
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Exportar / importar configuración
+
+/// Guarda todos los datos y preferencias en `path`, cifrados con la contraseña maestra actual.
+#[tauri::command]
+pub fn export_config(store: State<Store>, prefs: State<PrefsState>, path: String) -> Result<()> {
+    let data = store.read(|d| d.clone())?;
+    let plain = backup::pack(&data, &prefs.get())?;
+    let blob = store.seal(&plain)?;
+    std::fs::write(&path, blob)?;
+    Ok(())
+}
+
+#[derive(Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImportMode {
+    /// Añade lo que falta; lo existente no se toca.
+    Merge,
+    /// Sustituye todos los datos y preferencias por los del fichero.
+    Replace,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSummary {
+    /// Vaults nuevos (modo combinar) o total de vaults tras reemplazar.
+    vaults: usize,
+    /// Carpetas en seguimiento nuevas (combinar) o total tras reemplazar.
+    folders: usize,
+    replaced: bool,
+}
+
+/// Abre un fichero exportado con la contraseña con la que se exportó (`password`, no la actual).
+#[tauri::command]
+pub fn import_config(
+    app: tauri::AppHandle,
+    store: State<Store>,
+    prefs: State<PrefsState>,
+    path: String,
+    password: String,
+    mode: ImportMode,
+) -> Result<ImportSummary> {
+    let password = Zeroizing::new(password);
+    let blob = std::fs::read(&path)?;
+    let (_, plain) = Keys::decrypt(&password, &blob)?;
+    let incoming = backup::unpack(&plain)?;
+
+    let summary = store.write(|d| match mode {
+        ImportMode::Merge => {
+            let added = backup::merge(d, &incoming.data);
+            Ok(ImportSummary { vaults: added.vaults, folders: added.folders, replaced: false })
+        }
+        ImportMode::Replace => {
+            *d = incoming.data.clone();
+            backup::sanitize_for_this_machine(d);
+            Ok(ImportSummary { vaults: d.vaults.len(), folders: d.watched.len(), replaced: true })
+        }
+    })?;
+
+    if mode == ImportMode::Replace {
+        // Las preferencias vienen del otro equipo: el atajo puede no estar libre aquí, y entonces se conserva el actual.
+        let current = prefs.get();
+        let mut next = incoming.prefs;
+        if shell::change_shortcut(&app, current.shortcut.as_deref(), next.shortcut.as_deref()).is_err() {
+            let _ = shell::change_shortcut(&app, None, current.shortcut.as_deref());
+            next.shortcut = current.shortcut;
+        }
+        prefs.update(|p| *p = next)?;
+    }
+    Ok(summary)
 }

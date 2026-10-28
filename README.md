@@ -40,6 +40,7 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🔐 **Credenciales cifradas** con una contraseña maestra propia, y desbloqueo con **Windows Hello** (huella, rostro o PIN).
 - 🔑 **Keyfile predeterminada** para no repetirla en cada vault.
 - 🪟 **Siempre a mano:** vive en la bandeja del sistema y se abre desde cualquier aplicación con un **atajo global** configurable (por defecto `Ctrl + Alt + K`).
+- 💾 **Exportar e importar** toda la configuración en un fichero cifrado, para hacer copias o cambiar de equipo.
 - 🌗 **Tema claro, oscuro o el del sistema**, a tu elección.
 - 🌍 **Español e inglés.** Se elige solo según el idioma de Windows (español si lo es, inglés en cualquier otro caso) y se puede fijar en Ajustes.
 
@@ -91,6 +92,17 @@ Desde **Carpetas** puedes ver el estado de cada una, **re-escanearla por complet
 ### Windows Hello
 
 En **Ajustes → Windows Hello**, confirma tu contraseña maestra y actívalo. A partir de ahí la app se desbloquea con tu huella, rostro o PIN. Si falla o lo cancelas, siempre puedes usar la contraseña maestra. Si cambias la contraseña maestra, Hello se desactiva y hay que volver a activarlo.
+
+### Copia de seguridad y cambio de equipo
+
+En **Ajustes → Copia de seguridad**:
+
+- **Exportar…** guarda en un fichero `.kpm` tus clientes, las credenciales guardadas, las carpetas en seguimiento y las preferencias. Va **cifrado con tu contraseña maestra actual**; nada sale en claro.
+- **Importar…** pide el fichero y la contraseña maestra con la que se exportó (puede ser distinta de la de este equipo). Hay dos modos:
+  - **Combinar:** añade los vaults y carpetas que te faltan y no toca lo que ya tienes.
+  - **Reemplazar todo:** sustituye tus datos y preferencias por los del fichero. Tu contraseña maestra de este equipo no cambia.
+
+Las rutas se importan tal cual: si los `.kdbx` están en otra ruta en el equipo nuevo, las carpetas en seguimiento te avisarán de los que no encuentra para que los quites o los vuelvas a añadir.
 
 ### Tema e idioma
 

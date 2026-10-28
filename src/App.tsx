@@ -281,6 +281,12 @@ export default function App() {
     setPhase("locked");
   }, []);
 
+  // Tras importar, la lista y las preferencias (tema, idioma…) pueden haber cambiado por completo.
+  const importedDone = useCallback(async () => {
+    await refresh();
+    applyPrefs(await api.getPrefs());
+  }, [refresh, applyPrefs]);
+
   const saved = async (msg: string) => {
     setDialog(null);
     await refresh();
@@ -385,7 +391,7 @@ export default function App() {
         />
       )}
       {dialog?.kind === "sync" && <SyncDialog report={dialog.report} onClose={() => setDialog(null)} onDone={saved} />}
-      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} onPrefs={applyPrefs} onReset={resetDone} />}
+      {dialog?.kind === "settings" && <SettingsDialog onClose={() => setDialog(null)} onPrefs={applyPrefs} onReset={resetDone} onImported={importedDone} />}
 
       {toast && (
         <div className="toasts">

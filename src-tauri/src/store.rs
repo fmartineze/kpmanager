@@ -78,6 +78,12 @@ impl Store {
         *self.inner.lock().unwrap() = None;
     }
 
+    /// Cifra `plaintext` con la clave de la sesión (la contraseña maestra actual), con el mismo formato que `vaults.enc`.
+    pub fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        let guard = self.inner.lock().unwrap();
+        guard.as_ref().ok_or(AppError::Locked)?.keys.encrypt(plaintext)
+    }
+
     /// Borra el fichero cifrado y vacía la memoria: la app queda como en el primer arranque.
     /// Solo se permite con la app desbloqueada, para que no sea accesible sin la contraseña maestra.
     pub fn erase(&self) -> Result<()> {
@@ -157,6 +163,18 @@ mod tests {
         assert!(matches!(s2.unlock("x"), Err(AppError::WrongPassword)));
         s2.unlock("m").unwrap();
         assert_eq!(s2.read(|d| d.vaults.len()).unwrap(), 1);
+    }
+
+    #[test]
+    fn seal_is_openable_with_the_master_password_and_needs_unlock() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::with_cost(dir.path().join("vaults.enc"), FAST);
+        assert!(matches!(s.seal(b"x"), Err(AppError::Locked)));
+        s.unlock("maestra").unwrap();
+        let blob = s.seal(b"contenido").unwrap();
+        let (_, plain) = Keys::decrypt("maestra", &blob).unwrap();
+        assert_eq!(&plain[..], b"contenido");
+        assert!(matches!(Keys::decrypt("otra", &blob), Err(AppError::WrongPassword)));
     }
 
     #[test]

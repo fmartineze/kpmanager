@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { api, errMsg, HelloStatus, Prefs, PrefsUpdate } from "../api";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { api, errMsg, HelloStatus, ImportMode, Prefs, PrefsUpdate } from "../api";
 import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconFingerprint, IconKey, IconSettings, IconTrash } from "./Icons";
@@ -13,9 +13,11 @@ interface Props {
   onPrefs: (p: Prefs) => void;
   /** Se borraron todos los datos: la app debe volver al primer uso. */
   onReset: () => void;
+  /** Se importó una configuración: la lista y las preferencias deben recargarse. */
+  onImported: () => void;
 }
 
-export function SettingsDialog({ onClose, onPrefs, onReset }: Props) {
+export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props) {
   const t = useT();
   const [exe, setExe] = useState("");
   const [keyfile, setKeyfile] = useState("");
@@ -26,6 +28,10 @@ export function SettingsDialog({ onClose, onPrefs, onReset }: Props) {
   const [combo, setCombo] = useState("");
   const [shortcutErr, setShortcutErr] = useState("");
   const [confirmErase, setConfirmErase] = useState(false);
+  // Importación en curso: fichero elegido, su contraseña y el modo.
+  const [importFile, setImportFile] = useState<string | null>(null);
+  const [importPw, setImportPw] = useState("");
+  const [importMode, setImportMode] = useState<ImportMode>("merge");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -122,6 +128,49 @@ export function SettingsDialog({ onClose, onPrefs, onReset }: Props) {
       setHello(await api.helloStatus());
       setMsg(t("settings.helloDisabled"));
     });
+
+  const exportConfig = () =>
+    run(async () => {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const path = await saveDialog({
+        defaultPath: `kp-manager-${stamp}.kpm`,
+        filters: [{ name: "KP Manager", extensions: ["kpm"] }],
+      });
+      if (!path) return; // canceló el selector
+      await api.exportConfig(path);
+      setMsg(t("settings.exported"));
+    });
+
+  const pickImport = async () => {
+    const sel = await open({ multiple: false, directory: false, filters: [{ name: "KP Manager", extensions: ["kpm"] }] });
+    if (typeof sel !== "string") return;
+    setMsg("");
+    setError("");
+    setImportPw("");
+    setImportMode("merge");
+    setImportFile(sel);
+  };
+
+  const cancelImport = () => {
+    setImportFile(null);
+    setImportPw("");
+  };
+
+  const doImport = async () => {
+    if (!importFile) return;
+    setMsg("");
+    setError("");
+    try {
+      const r = await api.importConfig(importFile, importPw, importMode);
+      cancelImport();
+      setMsg(t(r.replaced ? "settings.importedReplace" : "settings.imported", { vaults: r.vaults, folders: r.folders }));
+      onImported();
+    } catch (e) {
+      // «Contraseña incorrecta» aquí es la del fichero, no la maestra de esta instalación.
+      const wrong = typeof e === "object" && e !== null && (e as { code?: string }).code === "wrongPassword";
+      setError(wrong ? t("settings.importWrongPw") : errMsg(e));
+    }
+  };
 
   const erase = () =>
     run(async () => {
@@ -276,6 +325,52 @@ export function SettingsDialog({ onClose, onPrefs, onReset }: Props) {
           </div>
           <button className="btn btn-secondary" onClick={changePw} disabled={!newPw}>{t("settings.change")}</button>
         </div>
+      </div>
+
+      <div className="section">
+        <span className="section-title">{t("settings.backup")}</span>
+        {importFile ? (
+          <>
+            <div className="field">
+              <label className="label" htmlFor="i-file">{t("settings.importFile")}</label>
+              <div className="input"><input id="i-file" className="input-el mono" readOnly value={importFile} /></div>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="i-pw">{t("settings.importPw")}</label>
+              <div className="input">
+                <IconKey className="s16" />
+                <input id="i-pw" className="input-el" type="password" autoComplete="off" autoFocus value={importPw} onChange={(e) => setImportPw(e.target.value)} />
+              </div>
+            </div>
+            <div className="field">
+              <span className="label">{t("settings.importMode")}</span>
+              <Segmented
+                label={t("settings.importMode")}
+                value={importMode}
+                onChange={setImportMode}
+                options={[
+                  { value: "merge", label: t("settings.modeMerge") },
+                  { value: "replace", label: t("settings.modeReplace") },
+                ]}
+              />
+              <div className="help">{t(importMode === "merge" ? "settings.modeMergeHelp" : "settings.modeReplaceHelp")}</div>
+            </div>
+            <div className="btns">
+              <button className={`btn btn-sm ${importMode === "replace" ? "btn-danger-solid" : "btn-primary"}`} onClick={doImport} disabled={!importPw}>
+                {t(importMode === "replace" ? "settings.importReplaceDo" : "settings.importDo")}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={cancelImport}>{t("common.cancel")}</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="help">{t("settings.backupHelp")}</div>
+            <div className="btns">
+              <button className="btn btn-secondary btn-sm" onClick={exportConfig}>{t("settings.export")}</button>
+              <button className="btn btn-secondary btn-sm" onClick={pickImport}>{t("settings.import")}</button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="section">
