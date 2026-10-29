@@ -4,13 +4,14 @@ import { api, errMsg } from "../api";
 import { IconFingerprint, IconKey, IconLock, IconShield } from "./Icons";
 import { Alert } from "./ui";
 import { rich, useT } from "../i18n";
+import { HelloMode, HelloTrigger, shouldPromptHello } from "../helloPolicy";
 
 interface Props {
   isNew: boolean;
   /** Windows Hello está activado: se ofrece como método principal. */
   hello: boolean;
-  /** Lanzar Windows Hello nada más mostrar la pantalla. */
-  autoHello: boolean;
+  /** Cuándo lanzar Windows Hello sin que el usuario lo pida (solo con la ventana a la vista y en primer plano). */
+  helloMode: HelloMode;
   onUnlocked: () => void;
 }
 
@@ -24,14 +25,13 @@ function strength(pw: string): number {
   return pw ? Math.max(s, 1) : 0;
 }
 
-export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
+export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
   const t = useT();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
-  const helloTried = useRef(false);
 
   const fail = (msg: string) => {
     setError(msg);
@@ -56,23 +56,37 @@ export function UnlockScreen({ isNew, hello, autoHello, onUnlocked }: Props) {
     }
   }
 
-  useEffect(() => {
-    if (hello && autoHello && !isNew && !helloTried.current) {
-      helloTried.current = true; // evita un segundo aviso por el doble montaje de StrictMode
-      useHello();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Hello solo se lanza solo una vez por pantalla de bloqueo («armado»): si el usuario lo cancela o falla,
+  // ya no vuelve a saltar y queda el botón. Y nunca con la ventana fuera de vista (ver helloPolicy).
+  const armed = useRef(hello && !isNew);
 
-  // Si la app se bloqueó al ocultarse, Hello se lanza al volver a mostrarla (atajo, bandeja…).
   useEffect(() => {
     if (!hello || isNew) return;
-    const unlisten = listen("focus-search", () => useHello());
+    const attempt = (trigger: HelloTrigger) => {
+      if (!armed.current || inFlight.current || !shouldPromptHello(helloMode, trigger)) return;
+      armed.current = false;
+      useHello();
+    };
+    const onReturn = () => attempt("return");
+    const onInteraction = () => attempt("interaction");
+
+    attempt("mount");
+    // La ventana recupera el foco (restaurarla de la barra de tareas, alt-tab…).
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    // Atajo global, bandeja o segunda ejecución: Rust trae la ventana al frente y avisa.
+    const unlisten = listen("focus-search", onReturn);
+    // Bloqueo por inactividad con la app a la vista: se pide al volver a tocarla, no de golpe.
+    const interactive = helloMode === "interaction" ? (["pointerdown", "pointermove", "keydown"] as const) : [];
+    interactive.forEach((e) => window.addEventListener(e, onInteraction));
     return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+      interactive.forEach((e) => window.removeEventListener(e, onInteraction));
       unlisten.then((f) => f());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hello, isNew]);
+  }, [hello, isNew, helloMode]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

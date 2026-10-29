@@ -28,6 +28,10 @@ pub struct Prefs {
     pub theme: String,
     /// `auto` (el del sistema) | `es` | `en`.
     pub language: String,
+    /// Comprobar en GitHub si hay una versión nueva (al arrancar y cada 24 h).
+    pub check_updates: bool,
+    /// Versión que el usuario eligió ignorar: no se vuelve a avisar de esa, sí de una posterior.
+    pub ignored_update: Option<String>,
 }
 
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
@@ -43,6 +47,8 @@ impl Default for Prefs {
             sort_by_name: false,
             theme: "system".into(),
             language: "auto".into(),
+            check_updates: true,
+            ignored_update: None,
         }
     }
 }
@@ -110,6 +116,7 @@ mod tests {
         assert!(p.minimize_to_tray);
         assert!(p.close_to_tray, "un fichero antiguo sin el campo usa el valor por defecto");
         assert_eq!((p.theme.as_str(), p.language.as_str()), ("system", "auto"));
+        assert!(p.check_updates && p.ignored_update.is_none(), "un fichero antiguo comprueba actualizaciones por defecto");
         assert_eq!(p.shortcut.as_deref(), Some(DEFAULT_SHORTCUT));
         fs::write(&path, b"{{no es json").unwrap();
         assert_eq!(PrefsState::load(path).get(), Prefs::default());

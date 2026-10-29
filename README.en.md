@@ -41,6 +41,7 @@ If you work with many clients and keep each one's credentials in its own KeePass
 - 🔐 **Encrypted credentials** with your own master password, and unlock with **Windows Hello** (fingerprint, face or PIN).
 - 🔑 **Default keyfile** so you don't have to repeat it on every vault.
 - 🪟 **Always at hand:** it lives in the system tray and opens from any application with a configurable **global shortcut** (`Ctrl + Alt + K` by default).
+- 🔔 **New-version notices** with the download link; you can ignore a version or turn the check off.
 - 💾 **Export and import** the whole configuration in an encrypted file, for backups or moving to another computer.
 - 🌗 **Light, dark or system theme**, your choice.
 - 🌍 **Spanish and English.** It picks one automatically from the Windows language (Spanish if it is Spanish, English otherwise) and you can fix it in Settings.
@@ -92,11 +93,11 @@ From **Folders** you can see each folder's status, **rescan it completely** (inc
 
 ### Windows Hello
 
-In **Settings → Windows Hello**, confirm your master password and enable it. From then on the app unlocks with your fingerprint, face or PIN. If it fails or you cancel it, you can always use the master password. If you change the master password, Hello is disabled and you have to enable it again.
+In **Settings → Security → Windows Hello**, confirm your master password and enable it. From then on the app unlocks with your fingerprint, face or PIN. If it fails or you cancel it, you can always use the master password. If you change the master password, Hello is disabled and you have to enable it again.
 
 ### Backup and moving to another computer
 
-In **Settings → Backup**:
+In **Settings → Data → Backup**:
 
 - **Export…** saves your clients, saved credentials, watched folders and preferences in a `.kpm` file. It is **encrypted with your current master password**; nothing leaves in clear text.
 - **Import…** asks for the file and the master password it was exported with (which may differ from this computer's). There are two modes:
@@ -105,15 +106,25 @@ In **Settings → Backup**:
 
 Paths are imported as they are: if the `.kdbx` files live at a different path on the new computer, the watched folders will tell you which ones they can't find so you can remove them or add them again.
 
+### Updates
+
+When you open the app (and every 24 hours if you leave it open) KP Manager checks GitHub for a newer version. If there is one, it tells you with the **link to the download page**, and you can choose:
+
+- **View and download:** opens the version's page in your browser.
+- **Later:** it won't tell you about that version again until you reopen the app.
+- **Ignore this version:** it won't tell you about that version again, but it will about a later one.
+
+In **Settings → About → Updates** you can **check now**, **be notified again** about the version you ignored, or **turn the check off** completely. The app does not update itself: it only lets you know.
+
 ### Theme and language
 
-In **Settings → Appearance** you choose the theme (**System**, **Light** or **Dark**) and the language (**Automatic**, **Español** or **English**). The change applies instantly. With "Automatic", the app uses Spanish if Windows is in Spanish and English otherwise.
+In **Settings → General → Appearance** you choose the theme (**System**, **Light** or **Dark**) and the language (**Automatic**, **Español** or **English**). The change applies instantly. With "Automatic", the app uses Spanish if Windows is in Spanish and English otherwise.
 
 ### System tray
 
 By default, **closing the window does not quit the app**: it stays in the tray and comes back with the global shortcut. To quit it completely, **right-click the tray icon → Quit KP Manager**.
 
-In **Settings → Window and list** you can change this behavior, also minimize to the tray, and **lock the app automatically when it is hidden**. It also locks itself after 5 minutes of inactivity.
+In **Settings → General → Window and list** you can change this behavior and also minimize to the tray. In **Settings → Security → Locking** you can make **the app lock when it is hidden**; it also locks itself after 5 minutes of inactivity.
 
 ## Security
 
@@ -121,7 +132,7 @@ In **Settings → Window and list** you can change this behavior, also minimize 
 - **Passwords sent to KeePassXC:** they travel through the process's standard input, **never** on the command line, where any program could see them.
 - **Windows Hello:** the master password is stored encrypted with a key that only Windows hands over after you authenticate with Hello. Copying the app's files is not enough to open it.
 - **Your `.kdbx` files are not touched:** KP Manager does not read or modify them; it only launches them in KeePassXC.
-- **Local and offline:** no accounts, no cloud, no telemetry.
+- **No accounts and no telemetry.** The only internet connection is an anonymous request to GitHub to see whether a new version exists; it sends none of your data and can be turned off in **Settings → About → Updates**.
 
 Where it stores its data (in `%APPDATA%\kpmanager\KPManager\config`):
 
@@ -142,7 +153,7 @@ In your `.kdbx` files, as always. KP Manager can only remember each vault's *ope
 No. It is optional. Without it, KeePassXC opens and asks for it as usual.
 
 **The global shortcut doesn't work.**
-If the combination is taken by another application, KP Manager tells you at startup and also in **Settings → Quick access**; pick a different one. Other possible causes:
+If the combination is taken by another application, KP Manager tells you at startup and also in **Settings → General → Quick access**; pick a different one. Other possible causes:
 
 - **A window running as administrator is in the foreground.** Windows does not deliver a normal application's global shortcuts while focus is on an elevated window (for example, an administrator console). Switch focus to another window and try again.
 - **Keyboards with an AltGr key.** On some layouts `Ctrl + Alt` is equivalent to `AltGr` and can clash with special characters. Try another combination, such as `Ctrl + Shift + K`.

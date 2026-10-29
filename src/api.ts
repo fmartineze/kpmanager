@@ -40,10 +40,13 @@ export interface Prefs {
   sortByName: boolean;
   theme: ThemePref;
   language: LangPref;
+  checkUpdates: boolean;
+  /** Versión de la que el usuario pidió no volver a recibir avisos. */
+  ignoredUpdate: string | null;
 }
 
-/** Lo que se edita desde Ajustes (el atajo global tiene su propio comando). */
-export type PrefsUpdate = Omit<Prefs, "shortcut">;
+/** Lo que se edita desde Ajustes (el atajo y la versión ignorada tienen sus propios comandos). */
+export type PrefsUpdate = Omit<Prefs, "shortcut" | "ignoredUpdate">;
 
 export type ImportMode = "merge" | "replace";
 
@@ -104,6 +107,7 @@ export const api = {
   setFavorite: (id: string, favorite: boolean) => invoke<void>("set_favorite", { id, favorite }),
   getPrefs: () => invoke<Prefs>("get_prefs"),
   setPrefs: (update: PrefsUpdate) => invoke<Prefs>("set_prefs", { update }),
+  ignoreUpdate: (version: string | null) => invoke<Prefs>("ignore_update", { version }),
   setTrayLanguage: (language: Lang) => invoke<void>("set_tray_language", { language }),
   setShortcut: (shortcut: string | null) => invoke<Prefs>("set_shortcut", { shortcut }),
   /** Motivo por el que el atajo global no está activo (null = activo o sin atajo). */

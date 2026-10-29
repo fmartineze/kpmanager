@@ -3,6 +3,10 @@ import { api, errMsg, HelloStatus, Prefs, SyncReport, Vault } from "./api";
 import { listen } from "@tauri-apps/api/event";
 import { rich, setLanguagePref, translate, useLang, useT } from "./i18n";
 import { setThemePref } from "./theme";
+import type { HelloMode } from "./helloPolicy";
+import { getVersion } from "@tauri-apps/api/app";
+import { fetchLatest, isNewer, Release } from "./updates";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { SyncDialog } from "./components/SyncDialog";
 import { WatchDialog } from "./components/WatchDialog";
 import { UnlockScreen } from "./components/UnlockScreen";
@@ -20,7 +24,7 @@ const DONE_MS = 1100;
 const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
-type Dialog = null | { kind: "form"; vault: Vault | null } | { kind: "scan"; rescan?: string } | { kind: "settings" } | { kind: "sync"; report: SyncReport } | { kind: "watch" };
+type Dialog = null | { kind: "form"; vault: Vault | null } | { kind: "scan"; rescan?: string } | { kind: "settings" } | { kind: "sync"; report: SyncReport } | { kind: "watch" } | { kind: "update"; release: Release };
 type Toast = { msg: string; kind: "ok" | "error"; key: number } | null;
 
 function Titlebar() {
@@ -55,9 +59,9 @@ export default function App() {
   const [toast, setToast] = useState<Toast>(null);
   const [opening, setOpening] = useState<OpenState>(null);
   const [hello, setHello] = useState<HelloStatus>({ supported: false, enabled: false });
-  // Tras bloquear a mano no se lanza Windows Hello solo; en el arranque y el bloqueo por inactividad sí.
-  const [autoHello, setAutoHello] = useState(true);
-  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto" });
+  // Cuándo se pide Windows Hello solo: al arrancar sí; tras bloquear, solo al volver a la app (ver helloPolicy).
+  const [helloMode, setHelloMode] = useState<HelloMode>("mount");
+  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto", checkUpdates: false, ignoredUpdate: null });
   // Fila resaltada para abrir con Enter; solo se muestra al buscar o tras usar las flechas.
   const [cursor, setCursor] = useState(0);
   const [navigated, setNavigated] = useState(false);
@@ -80,6 +84,38 @@ export default function App() {
   useEffect(() => {
     api.setTrayLanguage(lang).catch(() => {});
   }, [lang]);
+
+  // Aviso de versión nueva. Se comprueba al desbloquear y cada 24 h mientras la app siga abierta.
+  // `checkUpdates` empieza en false hasta leer las preferencias, así que no se consulta nada antes de saber si está permitido.
+  const ignoredRef = useRef<string | null>(null);
+  ignoredRef.current = prefs.ignoredUpdate;
+  const snoozedRef = useRef<string | null>(null); // «Más tarde»: no se repite en esta sesión
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "ready" || !prefs.checkUpdates || !appVersion) return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const latest = await fetchLatest();
+        if (stopped || !isNewer(latest.version, appVersion)) return;
+        if (latest.version === ignoredRef.current || latest.version === snoozedRef.current) return;
+        // Si el usuario está en medio de algo (un diálogo abierto), no se le interrumpe.
+        setDialog((d) => d ?? { kind: "update", release: latest });
+      } catch {
+        /* sin conexión o GitHub caído: se reintenta en la próxima comprobación */
+      }
+    };
+    check();
+    const timer = window.setInterval(check, 24 * 60 * 60 * 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [phase, prefs.checkUpdates, appVersion]);
 
   const showToast = useCallback((msg: string, kind: "ok" | "error" = "ok") => {
     const key = Date.now();
@@ -135,10 +171,11 @@ export default function App() {
     return () => window.removeEventListener("focus", h);
   }, [phase, checkWatched]);
 
-  const lock = useCallback(async (manual = false) => {
+  // `idle`: bloqueo por inactividad. `manual`: botón Bloquear, menú de la bandeja o al ocultar la ventana.
+  const lock = useCallback(async (kind: "idle" | "manual" = "idle") => {
     await api.lock();
     setHello(await api.helloStatus().catch(() => ({ supported: false, enabled: false })));
-    setAutoHello(!manual);
+    setHelloMode(kind === "idle" ? "interaction" : "return");
     setVaults([]);
     setQuery("");
     setNavigated(false);
@@ -200,7 +237,7 @@ export default function App() {
 
   // «Bloquear» desde el menú de la bandeja (Rust ya ha bloqueado el almacén).
   useEffect(() => {
-    const unlisten = listen("lock-request", () => lock(true));
+    const unlisten = listen("lock-request", () => lock("manual"));
     return () => {
       unlisten.then((f) => f());
     };
@@ -276,7 +313,7 @@ export default function App() {
     setDialog(null);
     setOpening(null);
     setHello((h) => ({ ...h, enabled: false }));
-    setAutoHello(false);
+    setHelloMode("return");
     setIsNew(true);
     setPhase("locked");
   }, []);
@@ -298,10 +335,10 @@ export default function App() {
     return (
       <Shell>
         <UnlockScreen
-          key={String(autoHello) + hello.enabled}
+          key={helloMode + hello.enabled}
           isNew={isNew}
           hello={hello.enabled}
-          autoHello={autoHello}
+          helloMode={helloMode}
           onUnlocked={async () => {
             await refresh();
             setPhase("ready");
@@ -349,7 +386,7 @@ export default function App() {
             <button className="btn btn-icon" aria-label={t("tip.settings")} onClick={() => setDialog({ kind: "settings" })}>
               <IconSettings /><span className="tip end">{t("tip.settings")}</span>
             </button>
-            <button className="btn btn-icon" aria-label={t("tip.lock")} onClick={() => lock(true)}>
+            <button className="btn btn-icon" aria-label={t("tip.lock")} onClick={() => lock("manual")}>
               <IconLock /><span className="tip end">{t("tip.lock")}</span>
             </button>
           </div>
@@ -387,6 +424,26 @@ export default function App() {
           onCheck={() => {
             setDialog(null);
             checkWatched(false);
+          }}
+        />
+      )}
+      {dialog?.kind === "update" && (
+        <UpdateDialog
+          release={dialog.release}
+          current={appVersion}
+          onLater={() => {
+            snoozedRef.current = dialog.release.version;
+            setDialog(null);
+          }}
+          onIgnore={async () => {
+            const v = dialog.release.version;
+            setDialog(null);
+            try {
+              applyPrefs(await api.ignoreUpdate(v));
+              showToast(t("update.ignored", { v }));
+            } catch (e) {
+              showToast(errMsg(e), "error");
+            }
           }}
         />
       )}

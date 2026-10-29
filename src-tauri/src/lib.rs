@@ -28,6 +28,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .on_window_event(|window, event| shell::on_window_event(window, event))
         .setup(|app| {
             let dir = ProjectDirs::from("com", "kpmanager", "KPManager")
@@ -81,6 +82,7 @@ pub fn run() {
             commands::get_prefs,
             commands::set_prefs,
             commands::set_tray_language,
+            commands::ignore_update,
             commands::set_shortcut,
             commands::shortcut_status,
         ])

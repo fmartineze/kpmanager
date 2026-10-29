@@ -300,6 +300,7 @@ pub struct PrefsUpdate {
     sort_by_name: bool,
     theme: String,
     language: String,
+    check_updates: bool,
 }
 
 #[tauri::command]
@@ -314,7 +315,15 @@ pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs>
         p.sort_by_name = update.sort_by_name;
         p.theme = theme;
         p.language = language;
+        p.check_updates = update.check_updates;
     })
+}
+
+/// Recuerda que el usuario ignora esta versión (`None` o vacío = volver a avisar).
+#[tauri::command]
+pub fn ignore_update(prefs: State<PrefsState>, version: Option<String>) -> Result<Prefs> {
+    let version = version.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+    prefs.update(|p| p.ignored_update = version)
 }
 
 /// Idioma ya resuelto por la interfaz (`es` | `en`) para los textos nativos: menú de la bandeja.

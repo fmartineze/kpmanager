@@ -41,6 +41,7 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🔐 **Credenciales cifradas** con una contraseña maestra propia, y desbloqueo con **Windows Hello** (huella, rostro o PIN).
 - 🔑 **Keyfile predeterminada** para no repetirla en cada vault.
 - 🪟 **Siempre a mano:** vive en la bandeja del sistema y se abre desde cualquier aplicación con un **atajo global** configurable (por defecto `Ctrl + Alt + K`).
+- 🔔 **Aviso de versiones nuevas** con el enlace de descarga; puedes ignorar una versión o desactivar la comprobación.
 - 💾 **Exportar e importar** toda la configuración en un fichero cifrado, para hacer copias o cambiar de equipo.
 - 🌗 **Tema claro, oscuro o el del sistema**, a tu elección.
 - 🌍 **Español e inglés.** Se elige solo según el idioma de Windows (español si lo es, inglés en cualquier otro caso) y se puede fijar en Ajustes.
@@ -92,11 +93,11 @@ Desde **Carpetas** puedes ver el estado de cada una, **re-escanearla por complet
 
 ### Windows Hello
 
-En **Ajustes → Windows Hello**, confirma tu contraseña maestra y actívalo. A partir de ahí la app se desbloquea con tu huella, rostro o PIN. Si falla o lo cancelas, siempre puedes usar la contraseña maestra. Si cambias la contraseña maestra, Hello se desactiva y hay que volver a activarlo.
+En **Ajustes → Seguridad → Windows Hello**, confirma tu contraseña maestra y actívalo. A partir de ahí la app se desbloquea con tu huella, rostro o PIN. Si falla o lo cancelas, siempre puedes usar la contraseña maestra. Si cambias la contraseña maestra, Hello se desactiva y hay que volver a activarlo.
 
 ### Copia de seguridad y cambio de equipo
 
-En **Ajustes → Copia de seguridad**:
+En **Ajustes → Datos → Copia de seguridad**:
 
 - **Exportar…** guarda en un fichero `.kpm` tus clientes, las credenciales guardadas, las carpetas en seguimiento y las preferencias. Va **cifrado con tu contraseña maestra actual**; nada sale en claro.
 - **Importar…** pide el fichero y la contraseña maestra con la que se exportó (puede ser distinta de la de este equipo). Hay dos modos:
@@ -105,15 +106,25 @@ En **Ajustes → Copia de seguridad**:
 
 Las rutas se importan tal cual: si los `.kdbx` están en otra ruta en el equipo nuevo, las carpetas en seguimiento te avisarán de los que no encuentra para que los quites o los vuelvas a añadir.
 
+### Actualizaciones
+
+Al abrir la app (y cada 24 horas si la dejas abierta) KP Manager mira en GitHub si hay una versión más reciente. Si la hay, te lo dice con el **enlace a la página de descarga**, y puedes elegir:
+
+- **Ver y descargar:** abre la página de la versión en tu navegador.
+- **Más tarde:** no te vuelve a avisar de esa versión hasta que reabras la app.
+- **Ignorar esta versión:** no te vuelve a avisar de esa versión, pero sí de una posterior.
+
+En **Ajustes → Acerca de → Actualizaciones** puedes **buscar ahora**, **volver a recibir avisos** de la versión que ignoraste, o **desactivar la comprobación** por completo. La app no se actualiza sola: solo te avisa.
+
 ### Tema e idioma
 
-En **Ajustes → Apariencia** eliges el tema (**Sistema**, **Claro** u **Oscuro**) y el idioma (**Automático**, **Español** o **English**). El cambio se aplica al instante. Con «Automático», la app usa español si Windows está en español y inglés en cualquier otro caso.
+En **Ajustes → General → Apariencia** eliges el tema (**Sistema**, **Claro** u **Oscuro**) y el idioma (**Automático**, **Español** o **English**). El cambio se aplica al instante. Con «Automático», la app usa español si Windows está en español y inglés en cualquier otro caso.
 
 ### Bandeja del sistema
 
 Por defecto, **cerrar la ventana no cierra la app**: se queda en la bandeja y reaparece con el atajo global. Para cerrarla del todo, **clic derecho en el icono de la bandeja → Cerrar KP Manager**.
 
-En **Ajustes → Ventana y lista** puedes cambiar este comportamiento, minimizar también a la bandeja, y **bloquear la app automáticamente al ocultarla**. Además se bloquea sola tras 5 minutos sin actividad.
+En **Ajustes → General → Ventana y lista** puedes cambiar este comportamiento y minimizar también a la bandeja. En **Ajustes → Seguridad → Bloqueo** puedes hacer que **la app se bloquee al ocultarla**; además se bloquea sola tras 5 minutos sin actividad.
 
 ## Seguridad
 
@@ -121,7 +132,7 @@ En **Ajustes → Ventana y lista** puedes cambiar este comportamiento, minimizar
 - **Contraseñas hacia KeePassXC:** viajan por la entrada estándar del proceso, **nunca** en la línea de comandos, donde cualquier programa podría verlas.
 - **Windows Hello:** la contraseña maestra se guarda cifrada con una clave que solo Windows entrega tras autenticarte con Hello. Copiar los ficheros de la app no sirve para abrirla.
 - **Tus `.kdbx` no se tocan:** KP Manager no los lee ni los modifica; solo los lanza en KeePassXC.
-- **Local y sin red:** no hay cuentas, nube ni telemetría.
+- **Sin cuentas ni telemetría.** La única conexión a internet es una consulta anónima a GitHub para saber si hay una versión nueva; no envía ningún dato tuyo y se puede desactivar en **Ajustes → Acerca de → Actualizaciones**.
 
 Dónde guarda sus datos (en `%APPDATA%\kpmanager\KPManager\config`):
 
@@ -142,7 +153,7 @@ En tus ficheros `.kdbx`, como siempre. KP Manager solo puede recordar la contras
 No. Es opcional. Sin ella, KeePassXC se abre y te la pide como siempre.
 
 **El atajo global no funciona.**
-Si la combinación está ocupada por otra aplicación, KP Manager te lo avisa al arrancar y también en **Ajustes → Acceso rápido**; elige otra distinta. Otras causas posibles:
+Si la combinación está ocupada por otra aplicación, KP Manager te lo avisa al arrancar y también en **Ajustes → General → Acceso rápido**; elige otra distinta. Otras causas posibles:
 
 - **Una ventana ejecutada como administrador en primer plano.** Windows no entrega los atajos globales de una aplicación normal mientras tienes el foco en una ventana con privilegios elevados (por ejemplo, una consola de administrador). Cambia el foco a otra ventana y vuelve a probar.
 - **Teclados con tecla AltGr.** En algunas distribuciones, `Ctrl + Alt` equivale a `AltGr` y puede chocar con caracteres especiales. Prueba con otra combinación, como `Ctrl + Mayús + K`.
