@@ -29,6 +29,8 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // Al iniciar con el sistema se pasa `--minimized`: la app arranca oculta en la bandeja.
+        .plugin(tauri_plugin_autostart::Builder::new().app_name("KP Manager").args(["--minimized"]).build())
         .on_window_event(|window, event| shell::on_window_event(window, event))
         .setup(|app| {
             let dir = ProjectDirs::from("com", "kpmanager", "KPManager")
@@ -40,6 +42,13 @@ pub fn run() {
             let shortcut = prefs.get().shortcut;
             app.manage(prefs);
             shell::setup_tray(app.handle())?;
+            // La ventana se crea oculta (tauri.conf) y solo se muestra si no es un arranque con el sistema.
+            let minimized = std::env::args().any(|a| a == "--minimized");
+            if !minimized {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                }
+            }
             // Si el atajo no se puede registrar (p. ej. lo usa otra aplicación) no hay ventana de consola
             // donde verlo: se guarda el motivo para que la interfaz lo muestre.
             let status = shell::ShortcutStatus::default();
@@ -83,6 +92,8 @@ pub fn run() {
             commands::set_prefs,
             commands::set_tray_language,
             commands::ignore_update,
+            commands::autostart_status,
+            commands::set_autostart,
             commands::set_shortcut,
             commands::shortcut_status,
         ])

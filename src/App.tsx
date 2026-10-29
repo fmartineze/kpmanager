@@ -65,6 +65,7 @@ export default function App() {
   // Fila resaltada para abrir con Enter; solo se muestra al buscar o tras usar las flechas.
   const [cursor, setCursor] = useState(0);
   const [navigated, setNavigated] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const deferred = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -178,6 +179,7 @@ export default function App() {
     setHelloMode(kind === "idle" ? "interaction" : "return");
     setVaults([]);
     setQuery("");
+    setTagFilter(null);
     setNavigated(false);
     setDialog(null);
     setOpening(null);
@@ -254,14 +256,31 @@ export default function App() {
     [vaults, prefs.sortByName],
   );
 
+  // Todas las etiquetas en uso, de la más usada a la menos (a igualdad, por orden alfabético).
+  const tagCounts = useMemo(() => {
+    const m = new Map<string, { label: string; n: number }>();
+    for (const v of vaults) for (const tag of v.tags) {
+      const k = tag.toLowerCase();
+      m.set(k, { label: m.get(k)?.label ?? tag, n: (m.get(k)?.n ?? 0) + 1 });
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [vaults]);
+  const allTags = useMemo(() => tagCounts.map((t) => t.label), [tagCounts]);
+
+  // Si la etiqueta activa deja de existir (al editar o borrar clientes), se quita el filtro en vez de dejar la lista vacía.
+  useEffect(() => {
+    if (tagFilter && !allTags.some((t) => t.toLowerCase() === tagFilter.toLowerCase())) setTagFilter(null);
+  }, [allTags, tagFilter]);
+
   const filtered = useMemo(() => {
     const q = norm(deferred.trim());
-    if (!q) return sorted;
-    return sorted.filter((v) => norm(v.client).includes(q) || norm(v.path).includes(q));
-  }, [sorted, deferred]);
+    const byTag = tagFilter ? sorted.filter((v) => v.tags.some((t) => t.toLowerCase() === tagFilter.toLowerCase())) : sorted;
+    if (!q) return byTag;
+    return byTag.filter((v) => norm(v.client).includes(q) || norm(v.path).includes(q) || v.tags.some((t) => norm(t).includes(q)));
+  }, [sorted, deferred, tagFilter]);
 
   // El cursor vuelve a la primera coincidencia al cambiar la búsqueda y nunca sale de la lista.
-  useEffect(() => setCursor(0), [deferred]);
+  useEffect(() => setCursor(0), [deferred, tagFilter]);
   const cursorIdx = Math.min(cursor, filtered.length - 1);
 
   async function open(v: Vault) {
@@ -350,6 +369,7 @@ export default function App() {
   }
 
   const q = query.trim();
+  const filtering = !!q || !!tagFilter;
 
   return (
     <Shell>
@@ -374,7 +394,7 @@ export default function App() {
         </div>
         <div className="meta">
           <span className="count">
-            {q ? <>{rich(t("count.of", { n: `<b>${filtered.length}</b>`, total: vaults.length }))}</> : <>{rich(t(vaults.length === 1 ? "count.client" : "count.clients", { n: `<b>${vaults.length}</b>` }))}</>}
+            {filtering ? <>{rich(t("count.of", { n: `<b>${filtered.length}</b>`, total: vaults.length }))}</> : <>{rich(t(vaults.length === 1 ? "count.client" : "count.clients", { n: `<b>${vaults.length}</b>` }))}</>}
           </span>
           <div className="actions">
             <button className="btn btn-icon accent" aria-label={t("tip.add")} onClick={() => setDialog({ kind: "form", vault: null })}>
@@ -391,12 +411,28 @@ export default function App() {
             </button>
           </div>
         </div>
+        {tagCounts.length > 0 && (
+          <div className="tagbar" role="group" aria-label={t("list.tagFilter")}>
+            <button className={`tagchip ${tagFilter ? "" : "on"}`} aria-pressed={!tagFilter} onClick={() => setTagFilter(null)}>
+              {t("list.tagAll")}
+            </button>
+            {tagCounts.map((x) => {
+              const on = tagFilter?.toLowerCase() === x.label.toLowerCase();
+              return (
+                <button key={x.label} className={`tagchip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => setTagFilter(on ? null : x.label)}>
+                  {x.label} <span className="n">{x.n}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <VaultList
         vaults={filtered}
         total={vaults.length}
         query={query}
+        tag={tagFilter}
         opening={opening}
         cursor={navigated || q ? cursorIdx : -1}
         onToggleFavorite={toggleFavorite}
@@ -406,7 +442,7 @@ export default function App() {
         onFolders={() => setDialog({ kind: "watch" })}
       />
 
-      {dialog?.kind === "form" && <VaultForm vault={dialog.vault} onClose={() => setDialog(null)} onSaved={saved} />}
+      {dialog?.kind === "form" && <VaultForm vault={dialog.vault} onClose={() => setDialog(null)} onSaved={saved} allTags={allTags} />}
       {dialog?.kind === "scan" && (
         <ScanDialog
           rescan={dialog.rescan}

@@ -10,6 +10,7 @@ export interface Vault {
   hasPassword: boolean;
   favorite: boolean;
   lastOpened: number | null;
+  tags: string[];
 }
 
 export interface VaultInput {
@@ -18,6 +19,7 @@ export interface VaultInput {
   keyfile: string | null;
   password: string | null;
   clearPassword: boolean;
+  tags: string[];
 }
 
 export interface Candidate {
@@ -92,6 +94,9 @@ export const api = {
   helloDisable: () => invoke<void>("hello_disable"),
   /** Borra todos los datos cifrados; la app vuelve al primer uso. */
   resetData: () => invoke<void>("reset_data"),
+  /** ¿La app arranca con el sistema? (lo dice el propio sistema, no un fichero nuestro) */
+  autostartStatus: () => invoke<boolean>("autostart_status"),
+  setAutostart: (enabled: boolean) => invoke<boolean>("set_autostart", { enabled }),
   exportConfig: (path: string) => invoke<void>("export_config", { path }),
   importConfig: (path: string, password: string, mode: ImportMode) =>
     invoke<ImportSummary>("import_config", { path, password, mode }),

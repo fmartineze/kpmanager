@@ -1,24 +1,29 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errMsg, Vault } from "../api";
 import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconEdit, IconKey, IconPlus, IconTrash } from "./Icons";
 import { Alert, Check, Note } from "./ui";
+import { TagInput } from "./TagInput";
 
 interface Props {
   vault: Vault | null;
   onClose: () => void;
   onSaved: (msg: string) => void;
+  /** Etiquetas que ya usan otros clientes, para autocompletar. */
+  allTags: string[];
 }
 
-export function VaultForm({ vault, onClose, onSaved }: Props) {
+export function VaultForm({ vault, onClose, onSaved, allTags }: Props) {
   const t = useT();
   const [client, setClient] = useState(vault?.client ?? "");
   const [path, setPath] = useState(vault?.path ?? "");
   const [keyfile, setKeyfile] = useState(vault?.keyfile ?? "");
   const [password, setPassword] = useState("");
   const [clearPassword, setClearPassword] = useState(false);
+  const [tags, setTags] = useState<string[]>(vault?.tags ?? []);
+  const tagDraft = useRef(""); // lo que haya a medias en el campo de etiquetas
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,7 +48,7 @@ export function VaultForm({ vault, onClose, onSaved }: Props) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const input = { client, path, keyfile: keyfile || null, password: password || null, clearPassword };
+    const input = { client, path, keyfile: keyfile || null, password: password || null, clearPassword, tags: tagDraft.current.trim() ? [...tags, tagDraft.current] : tags };
     setBusy(true);
     try {
       if (vault) await api.updateVault(vault.id, input);
@@ -120,6 +125,11 @@ export function VaultForm({ vault, onClose, onSaved }: Props) {
               <IconKey className="s14" /> {t("form.useDefaultKey")}
             </button>
           )}
+        </div>
+        <div className="field">
+          <span className="label">{t("form.tags")} <em>{t("common.optional")}</em></span>
+          <TagInput value={tags} onChange={setTags} suggestions={allTags} placeholder={t("form.tagsPh")} onDraft={(d) => (tagDraft.current = d)} />
+          <div className="help">{t("form.tagsHelp")}</div>
         </div>
         <div className="field">
           <label className="label" htmlFor="v-pw">{t("form.password")} <em>{t("common.optional")}</em></label>

@@ -26,6 +26,7 @@ pub struct VaultView {
     has_password: bool,
     favorite: bool,
     last_opened: Option<u64>,
+    tags: Vec<String>,
 }
 
 impl From<&Vault> for VaultView {
@@ -38,6 +39,7 @@ impl From<&Vault> for VaultView {
             has_password: v.password.as_ref().is_some_and(|p| !p.is_empty()),
             favorite: v.favorite,
             last_opened: v.last_opened,
+            tags: v.tags.clone(),
         }
     }
 }
@@ -52,6 +54,8 @@ pub struct VaultInput {
     password: Option<String>,
     #[serde(default)]
     clear_password: bool,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 impl VaultInput {
@@ -66,6 +70,7 @@ impl VaultInput {
         v.client = self.client.trim().to_owned();
         v.path = PathBuf::from(self.path.trim());
         v.keyfile = self.keyfile.filter(|k| !k.trim().is_empty()).map(PathBuf::from);
+        v.tags = crate::model::normalize_tags(self.tags);
         if self.clear_password {
             v.password = None;
         } else if let Some(p) = self.password.filter(|p| !p.is_empty()) {
@@ -647,4 +652,22 @@ pub fn import_config(
         prefs.update(|p| *p = next)?;
     }
     Ok(summary)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Inicio automático con el sistema
+
+use tauri_plugin_autostart::ManagerExt;
+
+/// ¿Arranca con el sistema? La fuente de verdad es el propio sistema (registro de Windows), no un fichero nuestro.
+#[tauri::command]
+pub fn autostart_status(app: tauri::AppHandle) -> Result<bool> {
+    app.autolaunch().is_enabled().map_err(|e| AppError::Invalid(e.to_string()))
+}
+
+#[tauri::command]
+pub fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool> {
+    let al = app.autolaunch();
+    if enabled { al.enable() } else { al.disable() }.map_err(|e| AppError::Invalid(e.to_string()))?;
+    al.is_enabled().map_err(|e| AppError::Invalid(e.to_string()))
 }

@@ -1,6 +1,6 @@
 [package]
 name = "kpmanager"
-version = "0.1.0"
+version = "0.2.0"
 description = "Gestor de múltiples vaults de KeePassXC"
 authors = ["fmartineze"]
 license = "MIT"
@@ -18,6 +18,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }

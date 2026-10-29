@@ -37,11 +37,13 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - ⌨️ **Todo con teclado:** escribe, flechas ↑↓ y **Enter** para abrir.
 - ⭐ **Favoritos y recientes:** fija arriba los clientes que más usas; el resto se ordena por último uso (o alfabéticamente).
 - 📁 **Importar carpetas enteras:** el cliente toma el nombre de la carpeta que contiene el `.kdbx`. Sin duplicados.
+- 🏷️ **Etiquetas** («Hosting», «Contabilidad»…) para agrupar clientes y filtrar la lista con un clic; también se buscan.
 - 👁️ **Carpetas en seguimiento:** la app avisa cuando aparece un vault nuevo o desaparece uno, y te pregunta qué hacer.
 - 🔐 **Credenciales cifradas** con una contraseña maestra propia, y desbloqueo con **Windows Hello** (huella, rostro o PIN).
 - 🔑 **Keyfile predeterminada** para no repetirla en cada vault.
 - 🪟 **Siempre a mano:** vive en la bandeja del sistema y se abre desde cualquier aplicación con un **atajo global** configurable (por defecto `Ctrl + Alt + K`).
 - 🔔 **Aviso de versiones nuevas** con el enlace de descarga; puedes ignorar una versión o desactivar la comprobación.
+- 🚀 **Inicio con Windows** (opcional): arranca oculta en la bandeja y bloqueada, lista para el atajo.
 - 💾 **Exportar e importar** toda la configuración en un fichero cifrado, para hacer copias o cambiar de equipo.
 - 🌗 **Tema claro, oscuro o el del sistema**, a tu elección.
 - 🌍 **Español e inglés.** Se elige solo según el idioma de Windows (español si lo es, inglés en cualquier otro caso) y se puede fijar en Ajustes.
@@ -53,6 +55,8 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 1. Ve a la página de [**Releases**](https://github.com/fmartineze/kpmanager/releases/latest).
 2. Descarga el instalador (`.exe` o `.msi`) y ejecútalo.
 3. Abre **KP Manager** desde el menú Inicio.
+
+El instalador `.exe` se muestra en **español** si Windows está en español y en **inglés** en cualquier otro caso. El `.msi` se publica en dos versiones, `es-ES` y `en-US`: elige la de tu idioma.
 
 > **Aviso de Windows SmartScreen.** El instalador todavía no está firmado digitalmente, así que Windows puede mostrar «Windows protegió su PC». Pulsa **Más información → Ejecutar de todas formas**. Si prefieres no fiarte del binario, puedes [compilarlo tú mismo](#compilar-desde-el-código).
 
@@ -81,6 +85,14 @@ Escribe parte del nombre del cliente y pulsa **Enter** (o haz clic en su fila). 
 | `Enter` | Abrir el vault resaltado |
 | `Esc` | Limpiar la búsqueda |
 | `Ctrl + Alt + K` | Abrir KP Manager desde cualquier sitio *(configurable)* |
+
+### Etiquetas
+
+En el formulario de cada cliente (lápiz) puedes añadir **etiquetas**: escribe y pulsa **Enter** o coma (hasta 8 por cliente, se autocompletan con las que ya usas). Aparecen:
+
+- como una **barra de filtros** bajo el buscador, con cuántos clientes tiene cada una: un clic filtra, otro quita el filtro;
+- como una insignia en la fila (la primera etiqueta y un «+N» si hay más);
+- en la **búsqueda**: escribir «conta» también encuentra a los clientes etiquetados «Contabilidad».
 
 ### Carpetas en seguimiento
 
@@ -125,6 +137,10 @@ En **Ajustes → General → Apariencia** eliges el tema (**Sistema**, **Claro**
 Por defecto, **cerrar la ventana no cierra la app**: se queda en la bandeja y reaparece con el atajo global. Para cerrarla del todo, **clic derecho en el icono de la bandeja → Cerrar KP Manager**.
 
 En **Ajustes → General → Ventana y lista** puedes cambiar este comportamiento y minimizar también a la bandeja. En **Ajustes → Seguridad → Bloqueo** puedes hacer que **la app se bloquee al ocultarla**; además se bloquea sola tras 5 minutos sin actividad.
+
+### Iniciar con Windows
+
+En **Ajustes → General → Inicio** puedes hacer que KP Manager arranque con el sistema. Lo hace **sin ventana y bloqueada**, en la bandeja: ábrela con el atajo global (o con el icono) y desbloquea con Windows Hello. Si desinstalas con el instalador `.exe`, esta entrada de inicio se elimina sola; si instalaste con el `.msi`, desactiva la opción antes de desinstalar.
 
 ## Seguridad
 

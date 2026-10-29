@@ -9,6 +9,8 @@ interface Props {
   vaults: Vault[];
   total: number;
   query: string;
+  /** Etiqueta activa en el filtro (null = todas). */
+  tag: string | null;
   opening: OpenState;
   /** Fila resaltada por el teclado (-1 = ninguna). */
   cursor: number;
@@ -24,7 +26,7 @@ const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 /** Mismo cliente, mismo color de avatar. */
 const hue = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6;
 
-export function VaultList({ vaults, total, query, opening, cursor, onToggleFavorite, onOpen, onEdit, onAdd, onFolders }: Props) {
+export function VaultList({ vaults, total, query, tag, opening, cursor, onToggleFavorite, onOpen, onEdit, onAdd, onFolders }: Props) {
   const t = useT();
 
   // Mantiene visible la fila resaltada al moverse con las flechas.
@@ -50,7 +52,7 @@ export function VaultList({ vaults, total, query, opening, cursor, onToggleFavor
       <div className="empty">
         <div className="empty-art neutral"><IconSearch /></div>
         <h2>{t("list.noResults")}</h2>
-        <p>{t("list.noResultsText", { q: query.trim() })}</p>
+        <p>{query.trim() ? t("list.noResultsText", { q: query.trim() }) : t("list.noResultsTag", { tag: tag ?? "" })}</p>
       </div>
     );
   }
@@ -66,9 +68,16 @@ export function VaultList({ vaults, total, query, opening, cursor, onToggleFavor
             className={`row ${cls}`}
             style={{ animation: "kp-fade-up var(--kp-dur-base) var(--kp-ease-out) backwards", animationDelay: `${Math.min(i, 12) * 22}ms` }}
           >
-            <button className="row-main" onClick={() => onOpen(v)} disabled={!!opening} title={v.path}>
+            <button className="row-main" onClick={() => onOpen(v)} disabled={!!opening} title={v.tags.length ? `${v.path}\n#${v.tags.join(" #")}` : v.path}>
               <span className={`avatar av-${hue(v.client)}`}>{phase === "done" ? <IconCheck className="s16" /> : initial(v.client)}</span>
               <span className="row-name">{v.client}</span>
+              {v.tags.length > 0 && !phase && (
+                <span className="row-tags">
+                  {/* Solo la primera: con más, el nombre del cliente (lo importante) se recortaría demasiado */}
+                  <span className="tag-badge">{v.tags[0]}</span>
+                  {v.tags.length > 1 && <span className="tag-badge more">+{v.tags.length - 1}</span>}
+                </span>
+              )}
               {phase && (
                 <span className={`row-status ${phase === "done" ? "ok" : ""}`}>
                   {phase === "opening" ? <span className="spin" /> : <IconCheck className="s14" />}

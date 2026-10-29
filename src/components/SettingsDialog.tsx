@@ -35,6 +35,8 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
   const [combo, setCombo] = useState("");
   const [shortcutErr, setShortcutErr] = useState("");
   const [confirmErase, setConfirmErase] = useState(false);
+  // null = aún no se sabe / no disponible (p. ej. en el simulador)
+  const [autostart, setAutostart] = useState<boolean | null>(null);
   // Comprobación manual de versión nueva
   const [version, setVersion] = useState("");
   const [checking, setChecking] = useState(false);
@@ -56,6 +58,7 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
       setKeyfile(s.defaultKeyfile ?? "");
     });
     api.helloStatus().then(setHello);
+    api.autostartStatus().then(setAutostart).catch(() => setAutostart(null));
     getVersion().then(setVersion).catch(() => {});
     api.shortcutStatus().then((e) => setShortcutErr(e ? errMsg(e) : ""));
   }, []);
@@ -159,6 +162,11 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
     run(async () => {
       onPrefs(await api.ignoreUpdate(null));
       setPrefs(await api.getPrefs());
+    });
+
+  const toggleAutostart = (on: boolean) =>
+    run(async () => {
+      setAutostart(await api.setAutostart(on));
     });
 
   const exportConfig = () =>
@@ -336,6 +344,14 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 {prefs?.shortcut && <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(null)}>{t("common.remove")}</button>}
               </div>
             </div>
+
+            {autostart !== null && (
+              <div className="section">
+                <span className="section-title">{t("settings.startup")}</span>
+                <Check checked={autostart} onChange={toggleAutostart}>{t("settings.autostart")}</Check>
+                <div className="help">{t("settings.autostartHelp")}</div>
+              </div>
+            )}
 
             <div className="section">
               <span className="section-title">{t("settings.window")}</span>

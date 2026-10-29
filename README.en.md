@@ -37,11 +37,13 @@ If you work with many clients and keep each one's credentials in its own KeePass
 - ⌨️ **Keyboard-first:** type, ↑↓ arrows and **Enter** to open.
 - ⭐ **Favorites and recents:** pin your most-used clients on top; the rest is sorted by last use (or alphabetically).
 - 📁 **Import whole folders:** the client takes the name of the folder that contains the `.kdbx`. No duplicates.
+- 🏷️ **Tags** ("Hosting", "Accounting"…) to group clients and filter the list with one click; they are searchable too.
 - 👁️ **Watched folders:** the app tells you when a new vault appears or one disappears, and asks what to do.
 - 🔐 **Encrypted credentials** with your own master password, and unlock with **Windows Hello** (fingerprint, face or PIN).
 - 🔑 **Default keyfile** so you don't have to repeat it on every vault.
 - 🪟 **Always at hand:** it lives in the system tray and opens from any application with a configurable **global shortcut** (`Ctrl + Alt + K` by default).
 - 🔔 **New-version notices** with the download link; you can ignore a version or turn the check off.
+- 🚀 **Start with Windows** (optional): it starts hidden in the tray and locked, ready for the shortcut.
 - 💾 **Export and import** the whole configuration in an encrypted file, for backups or moving to another computer.
 - 🌗 **Light, dark or system theme**, your choice.
 - 🌍 **Spanish and English.** It picks one automatically from the Windows language (Spanish if it is Spanish, English otherwise) and you can fix it in Settings.
@@ -53,6 +55,8 @@ If you work with many clients and keep each one's credentials in its own KeePass
 1. Go to the [**Releases**](https://github.com/fmartineze/kpmanager/releases/latest) page.
 2. Download the installer (`.exe` or `.msi`) and run it.
 3. Open **KP Manager** from the Start menu.
+
+The `.exe` installer is shown in **Spanish** if Windows is in Spanish and in **English** otherwise. The `.msi` is published in two versions, `es-ES` and `en-US`: pick the one in your language.
 
 > **Windows SmartScreen warning.** The installer is not digitally signed yet, so Windows may show "Windows protected your PC". Click **More info → Run anyway**. If you'd rather not trust the binary, you can [build it yourself](#build-from-source).
 
@@ -81,6 +85,14 @@ Type part of the client's name and press **Enter** (or click its row). KeePassXC
 | `Enter` | Open the highlighted vault |
 | `Esc` | Clear the search |
 | `Ctrl + Alt + K` | Open KP Manager from anywhere *(configurable)* |
+
+### Tags
+
+In each client's form (pencil) you can add **tags**: type and press **Enter** or comma (up to 8 per client; they autocomplete from the ones you already use). They show up:
+
+- as a **filter bar** under the search box, with how many clients each one has: one click filters, another removes the filter;
+- as a badge on the row (the first tag and a "+N" if there are more);
+- in **search**: typing "acc" also finds clients tagged "Accounting".
 
 ### Watched folders
 
@@ -125,6 +137,10 @@ In **Settings → General → Appearance** you choose the theme (**System**, **L
 By default, **closing the window does not quit the app**: it stays in the tray and comes back with the global shortcut. To quit it completely, **right-click the tray icon → Quit KP Manager**.
 
 In **Settings → General → Window and list** you can change this behavior and also minimize to the tray. In **Settings → Security → Locking** you can make **the app lock when it is hidden**; it also locks itself after 5 minutes of inactivity.
+
+### Start with Windows
+
+In **Settings → General → Startup** you can make KP Manager start with the system. It does so **without a window and locked**, in the tray: open it with the global shortcut (or the icon) and unlock with Windows Hello. If you uninstall with the `.exe` installer, this startup entry is removed automatically; if you installed with the `.msi`, turn the option off before uninstalling.
 
 ## Security
 
