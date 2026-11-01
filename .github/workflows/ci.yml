@@ -27,6 +27,10 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    # rustsec/audit-check publica el resultado como un «check run» y necesita este permiso.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
