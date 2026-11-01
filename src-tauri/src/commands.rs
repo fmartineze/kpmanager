@@ -174,6 +174,129 @@ pub fn reset_data(store: State<Store>, hello: State<Hello>) -> Result<()> {
     Ok(())
 }
 
+// ───────────────────────── Ubicación del fichero de datos ─────────────────────────
+
+const DATA_FILE_NAME: &str = "vaults.enc";
+
+/// Dónde guarda el fichero de datos si el usuario no elige otro sitio.
+pub struct DefaultDataFile(pub PathBuf);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataLocation {
+    path: String,
+    is_default: bool,
+    exists: bool,
+}
+
+fn data_location_view(store: &Store, default: &DefaultDataFile) -> DataLocation {
+    let path = store.path();
+    DataLocation { path: path.to_string_lossy().into_owned(), is_default: path == default.0, exists: path.is_file() }
+}
+
+#[tauri::command]
+pub fn data_location(store: State<Store>, default: State<DefaultDataFile>) -> DataLocation {
+    data_location_view(&store, &default)
+}
+
+/// Cambia dónde se guarda el fichero de datos. Los cuadros de selección los abre Rust: la interfaz nunca decide
+/// una ruta. `action`:
+/// - `folder`: elegir una carpeta (el fichero será `vaults.enc` dentro de ella);
+/// - `existing`: usar un fichero de datos que ya existe (de otro equipo, de una copia…);
+/// - `default`: volver a la carpeta de configuración de la app.
+///
+/// Con `move_data` y la app desbloqueada, el fichero actual se copia al destino (sin pisar nada), se comprueba
+/// y se borra el antiguo. Sin ello se pasa a usar el fichero del destino, que se desbloqueará con su propia
+/// contraseña maestra, y la app se bloquea. Devuelve `None` si el usuario cancela el cuadro.
+#[tauri::command]
+pub async fn change_data_location(
+    app: tauri::AppHandle,
+    store: State<'_, Store>,
+    prefs: State<'_, PrefsState>,
+    hello: State<'_, Hello>,
+    default: State<'_, DefaultDataFile>,
+    action: String,
+    move_data: bool,
+) -> Result<Option<DataLocation>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let default_path = default.0.clone();
+    let picker = app.clone();
+    let target: PathBuf = match action.as_str() {
+        "default" => default_path.clone(),
+        "folder" => {
+            let dir = blocking(move || Ok(picker.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()))).await?;
+            match dir {
+                Some(dir) => dir.join(DATA_FILE_NAME),
+                None => return Ok(None),
+            }
+        }
+        "existing" => {
+            let file = blocking(move || {
+                Ok(picker.dialog().file().add_filter("KP Manager", &["enc"]).blocking_pick_file().and_then(|p| p.into_path().ok()))
+            })
+            .await?;
+            match file {
+                Some(file) => file,
+                None => return Ok(None),
+            }
+        }
+        _ => return Err(AppError::NotFound),
+    };
+
+    // Un fichero que ya está en el destino debe ser de KP Manager; si lo elegido es «uno existente», debe estar.
+    let present = target.is_file();
+    if present && !Keys::looks_valid(&std::fs::read(&target)?) {
+        return Err(AppError::msg("dataNotKpm"));
+    }
+    if action == "existing" && !present {
+        return Err(AppError::msg("dataNotKpm"));
+    }
+    if target == store.path() {
+        return Ok(Some(data_location_view(&store, &default)));
+    }
+    let stored = (target != default_path).then(|| target.to_string_lossy().into_owned());
+
+    if move_data && action != "existing" && store.is_unlocked() {
+        let old = store.relocate(target.clone())?;
+        if let Err(e) = prefs.update(|p| p.data_file = stored) {
+            // No se pudo recordar el cambio: se vuelve al fichero de antes y se retira la copia.
+            store.force_path(old);
+            let _ = std::fs::remove_file(&target);
+            return Err(e);
+        }
+        // Todo está en su sitio: el fichero antiguo ya no hace falta.
+        let _ = std::fs::remove_file(&old);
+    } else {
+        let before = store.path();
+        if store.is_unlocked() {
+            shell::lock_all(&app);
+        }
+        store.set_path(target)?;
+        if let Err(e) = prefs.update(|p| p.data_file = stored) {
+            store.force_path(before);
+            return Err(e);
+        }
+        // La contraseña maestra que guarda Windows Hello era la del fichero anterior.
+        hello.disable();
+    }
+    Ok(Some(data_location_view(&store, &default)))
+}
+
+/// Recoge los cambios que otro equipo haya sincronizado en el fichero de datos (OneDrive, Drive…). Devuelve si
+/// hubo alguno. Si el fichero ya no se puede leer con lo que tenemos (otra contraseña maestra, o una versión más
+/// nueva de la app), se bloquea y el error llega a la interfaz.
+#[tauri::command]
+pub fn sync_data(app: tauri::AppHandle, store: State<Store>) -> Result<bool> {
+    match store.sync() {
+        Err(e @ AppError::Msg { code: "dataKeyChanged" | "dataNewer", .. }) => {
+            shell::lock_all(&app);
+            Err(e)
+        }
+        other => other,
+    }
+}
+
 /// Autentica con Windows Hello y desbloquea. Si falla, la UI cae a la contraseña maestra.
 #[tauri::command]
 pub async fn hello_unlock(store: State<'_, Store>, hello: State<'_, Hello>) -> Result<()> {
@@ -659,6 +782,29 @@ pub fn copy_secret(
     let text = session.with(&id, |db| vaultdb::secret(db, &entry, &field))?;
     let secs = prefs.get().clipboard_clear_secs;
     clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))
+}
+
+/// Copia al portapapeles un informe en texto con las credenciales de las entradas elegidas, para pegarlo en
+/// una herramienta de compartir secretos. El texto se construye y se copia en Rust (con las mismas
+/// protecciones que «copiar»): no pasa por la interfaz. Devuelve cuántas entradas incluye.
+#[tauri::command]
+pub fn copy_report(
+    store: State<Store>,
+    session: State<Session>,
+    prefs: State<PrefsState>,
+    clipboard: State<Clipboard>,
+    id: String,
+    entries: Vec<String>,
+    include_custom: bool,
+    include_notes: bool,
+    lang: String,
+) -> Result<usize> {
+    require_unlocked(&store)?;
+    let opts = vaultdb::ReportOptions { include_custom, include_notes };
+    let text = session.with(&id, |db| vaultdb::report(db, &entries, opts, &lang))?;
+    let secs = prefs.get().clipboard_clear_secs;
+    clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))?;
+    Ok(entries.len())
 }
 
 /// Guarda un adjunto. El diálogo «Guardar como» lo abre Rust: la ruta nunca la decide la interfaz.

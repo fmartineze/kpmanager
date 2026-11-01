@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, errMsg } from "../api";
+import { api, DataAction, DataLocation, errMsg } from "../api";
 import { IconFingerprint, IconKey, IconLock, IconShield } from "./Icons";
 import { Alert } from "./ui";
 import { rich, useT } from "../i18n";
 import { HelloMode, HelloTrigger, shouldPromptHello } from "../helloPolicy";
+import { FALLBACK_URL } from "../updates";
+import { openRelease } from "./UpdateDialog";
 
 interface Props {
   isNew: boolean;
@@ -13,6 +15,8 @@ interface Props {
   /** Cuándo lanzar Windows Hello sin que el usuario lo pida (solo con la ventana a la vista y en primer plano). */
   helloMode: HelloMode;
   onUnlocked: () => void;
+  /** Cambió el fichero de datos (otra carpeta o uno existente): hay que volver a leer el estado. */
+  onLocation: () => void;
 }
 
 /** 0–4 según longitud y variedad de caracteres. */
@@ -25,13 +29,51 @@ function strength(pw: string): number {
   return pw ? Math.max(s, 1) : 0;
 }
 
-export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
+export function UnlockScreen({ isNew, hello, helloMode, onUnlocked, onLocation }: Props) {
   const t = useT();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
+  // Dónde está el fichero de datos. Solo se muestra en el primer uso (o si el fichero elegido no está).
+  const [loc, setLoc] = useState<DataLocation | null>(null);
+  const [locOpen, setLocOpen] = useState(false);
+  // Aviso de «no está el fichero»: solo si ya venía elegido de antes, no si el usuario acaba de elegir una carpeta nueva.
+  const [missing, setMissing] = useState(false);
+  // El fichero de datos lo guardó una versión de la app más nueva: se ofrece actualizar en vez de un error.
+  // Contiene la versión mínima necesaria si el fichero la indica, o "" si no.
+  const [newer, setNewer] = useState<string | null>(null);
+
+  /** Si el error es «fichero de una versión más nueva», muestra el panel de actualización; si no, el error normal. */
+  function failWith(err: unknown) {
+    if (err && typeof err === "object" && (err as { code?: string }).code === "dataNewer") {
+      setNewer((err as { arg?: string }).arg ?? "");
+      setError("");
+      api.dataLocation().then(setLoc).catch(() => {});
+      return;
+    }
+    fail(errMsg(err));
+  }
+
+  useEffect(() => {
+    if (isNew) api.dataLocation().then((l) => { setLoc(l); setMissing(!l.isDefault); }).catch(() => {});
+  }, [isNew]);
+
+  async function changeLocation(action: DataAction) {
+    setError("");
+    try {
+      const r = await api.changeDataLocation(action, false);
+      if (r) {
+        setLoc(r);
+        setMissing(false);
+        setLocOpen(false);
+        onLocation();
+      }
+    } catch (err) {
+      fail(errMsg(err));
+    }
+  }
 
   const fail = (msg: string) => {
     setError(msg);
@@ -49,7 +91,8 @@ export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
       await api.helloUnlock();
       onUnlocked();
     } catch (err) {
-      fail(t("unlock.helloFail", { err: errMsg(err) }));
+      if (err && typeof err === "object" && (err as { code?: string }).code === "dataNewer") failWith(err);
+      else fail(t("unlock.helloFail", { err: errMsg(err) }));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -99,7 +142,7 @@ export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
       setPw2("");
       onUnlocked();
     } catch (err) {
-      fail(errMsg(err));
+      failWith(err);
     } finally {
       setBusy(false);
     }
@@ -148,6 +191,14 @@ export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
             </div>
           </div>
         )}
+        {newer !== null && (
+          <Alert kind="info">
+            <b>{t("unlock.newerTitle")}</b> {t("unlock.newerBody")} {newer && t("unlock.newerReq", { v: newer })}
+            <div className="btns" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => openRelease(FALLBACK_URL)}>{t("unlock.newerGet")}</button>
+            </div>
+          </Alert>
+        )}
         {error && <Alert kind="err">{error}</Alert>}
         <button className="btn btn-primary btn-block" disabled={busy || !pw}>
           {busy && <span className="spin" />}
@@ -159,6 +210,24 @@ export function UnlockScreen({ isNew, hello, helloMode, onUnlocked }: Props) {
           </button>
         )}
       </form>
+
+      {(isNew || newer !== null) && loc && (
+        <div className="dataloc">
+          {missing && <Alert kind="info">{t("data.missing")}</Alert>}
+          <div className="help">
+            {t("data.where")} <span className="dataloc-path" title={loc.path}>{loc.path}</span>
+          </div>
+          {locOpen ? (
+            <div className="btns">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => changeLocation("folder")}>{t("data.chooseFolder")}</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => changeLocation("existing")}>{t("data.useExisting")}</button>
+              {!loc.isDefault && <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeLocation("default")}>{t("data.useDefault")}</button>}
+            </div>
+          ) : (
+            <button type="button" className="link-btn" onClick={() => setLocOpen(true)}>{t("data.change")}</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

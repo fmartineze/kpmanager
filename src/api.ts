@@ -127,6 +127,14 @@ export interface HelloStatus {
   enabled: boolean;
 }
 
+export interface DataLocation {
+  path: string;
+  isDefault: boolean;
+  exists: boolean;
+}
+
+export type DataAction = "folder" | "existing" | "default";
+
 export interface Settings {
   keepassxcPath: string | null;
   defaultKeyfile: string | null;
@@ -157,6 +165,12 @@ export const api = {
   helloEnable: (password: string) => invoke<void>("hello_enable", { password }),
   helloDisable: () => invoke<void>("hello_disable"),
   /** Borra todos los datos cifrados; la app vuelve al primer uso. */
+  /** Recoge los cambios que otro equipo haya sincronizado en el fichero de datos; true si hubo alguno. */
+  syncData: () => invoke<boolean>("sync_data"),
+  dataLocation: () => invoke<DataLocation>("data_location"),
+  /** Rust abre el cuadro de selección y aplica el cambio; null = el usuario canceló. */
+  changeDataLocation: (action: DataAction, moveData: boolean) =>
+    invoke<DataLocation | null>("change_data_location", { action, moveData }),
   resetData: () => invoke<void>("reset_data"),
   /** ¿La app arranca con el sistema? (lo dice el propio sistema, no un fichero nuestro) */
   autostartStatus: () => invoke<boolean>("autostart_status"),
@@ -193,6 +207,9 @@ export const api = {
   copySecret: (id: string, entry: string, field: string) => invoke<void>("copy_secret", { id, entry, field }),
   /** Abre «Guardar como» en Rust; devuelve false si el usuario cancela. */
   saveAttachment: (id: string, entry: string, name: string) => invoke<boolean>("save_attachment", { id, entry, name }),
+  /** Copia desde Rust un informe de texto con las credenciales de esas entradas; devuelve cuántas incluye. */
+  copyReport: (id: string, entries: string[], includeCustom: boolean, includeNotes: boolean, lang: string) =>
+    invoke<number>("copy_report", { id, entries, includeCustom, includeNotes, lang }),
   openLink: (url: string) => invoke<void>("open_link", { url }),
   getSettings: () => invoke<Settings>("get_settings"),
   setKeepassxcPath: (path: string | null) => invoke<Settings>("set_keepassxc_path", { path }),

@@ -73,7 +73,8 @@ export function rich(text: string): ReactNode {
 export function errorText(e: unknown): string {
   if (e && typeof e === "object" && "code" in e) {
     const { code, arg, message } = e as { code: string; arg?: string; message?: string };
-    const key = `err.${code}` as Key;
+    // Sin versión mínima conocida se usa el texto que no la menciona.
+    const key = (code === "dataNewer" && !arg ? "err.dataNewerAny" : `err.${code}`) as Key;
     if (key in es) return translate(key, { arg: arg ?? "" });
     return message ?? String(code);
   }

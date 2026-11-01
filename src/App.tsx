@@ -170,10 +170,14 @@ export default function App() {
   // Al volver a la ventana (máx. una vez cada 30 s) se revisan las carpetas en seguimiento.
   useEffect(() => {
     if (phase !== "ready") return;
-    const h = () => Date.now() - lastCheck.current > 30_000 && checkWatched();
+    const h = () => {
+      // El fichero de datos puede estar en OneDrive/Drive y haberlo cambiado otro equipo.
+      api.syncData().then(async (changed) => { if (changed) await refresh(); }).catch((e) => showToast(errMsg(e), "error"));
+      if (Date.now() - lastCheck.current > 30_000) checkWatched();
+    };
     window.addEventListener("focus", h);
     return () => window.removeEventListener("focus", h);
-  }, [phase, checkWatched]);
+  }, [phase, checkWatched, refresh, showToast]);
 
   // `idle`: bloqueo por inactividad. `manual`: botón Bloquear, menú de la bandeja o al ocultar la ventana.
   const lock = useCallback(async (kind: "idle" | "manual" = "idle") => {
@@ -395,6 +399,11 @@ export default function App() {
           isNew={isNew}
           hello={hello.enabled}
           helloMode={helloMode}
+          onLocation={async () => {
+            const s = await api.status();
+            setIsNew(!s.exists);
+            setHello(await api.helloStatus().catch(() => ({ supported: false, enabled: false })));
+          }}
           onUnlocked={async () => {
             await refresh();
             setPhase("ready");

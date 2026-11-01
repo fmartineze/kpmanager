@@ -33,6 +33,9 @@ pub fn pack(data: &Data, prefs: &Prefs) -> Result<Zeroizing<Vec<u8>>> {
 pub fn unpack(plain: &[u8]) -> Result<Export> {
     // Un descifrado correcto con contenido que no es nuestro JSON también es «no es una exportación».
     let export: Export = serde_json::from_slice(plain).map_err(|_| AppError::msg("notExport"))?;
+    if export.data.format > crate::model::DATA_FORMAT {
+        return Err(AppError::msg_arg("dataNewer", export.data.min_app.clone().unwrap_or_default()));
+    }
     if export.kind != KIND {
         return Err(AppError::msg("notExport"));
     }

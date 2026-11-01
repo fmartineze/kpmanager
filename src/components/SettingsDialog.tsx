@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { api, errMsg, HelloStatus, ImportMode, Prefs, PrefsUpdate } from "../api";
+import { api, DataAction, DataLocation, errMsg, HelloStatus, ImportMode, Prefs, PrefsUpdate } from "../api";
 import { useT } from "../i18n";
 import { Modal } from "./Modal";
 import { IconFingerprint, IconKey, IconSettings, IconTrash } from "./Icons";
-import { Alert, Check, Segmented } from "./ui";
+import { Alert, Check, Note, Segmented } from "./ui";
 import { comboFromEvent, DEFAULT_SHORTCUT } from "../shortcut";
 import { getVersion } from "@tauri-apps/api/app";
 import { fetchLatest, isNewer, REPO_URL_PREFIX, Release } from "../updates";
@@ -45,6 +45,9 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
   const [importFile, setImportFile] = useState<string | null>(null);
   const [importPw, setImportPw] = useState("");
   const [importMode, setImportMode] = useState<ImportMode>("merge");
+  // Ubicación del fichero de datos y, si se pide usar uno existente, la confirmación previa.
+  const [dataLoc, setDataLoc] = useState<DataLocation | null>(null);
+  const [confirmExisting, setConfirmExisting] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -58,6 +61,7 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
       setKeyfile(s.defaultKeyfile ?? "");
     });
     api.helloStatus().then(setHello);
+    api.dataLocation().then(setDataLoc).catch(() => {});
     api.autostartStatus().then(setAutostart).catch(() => setAutostart(null));
     getVersion().then(setVersion).catch(() => {});
     api.shortcutStatus().then((e) => setShortcutErr(e ? errMsg(e) : ""));
@@ -111,6 +115,16 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
       const next = await api.setPrefs({ ...current, ...patch });
       setPrefs(next);
       onPrefs(next);
+    });
+
+  const changeLocation = (action: DataAction, moveData: boolean) =>
+    run(async () => {
+      setConfirmExisting(false);
+      const r = await api.changeDataLocation(action, moveData);
+      if (!r) return; // canceló el cuadro de selección
+      setDataLoc(r);
+      if (moveData) setMsg(t("data.moved"));
+      // Con «usar uno existente» la app se bloquea y esta ventana se cierra sola.
     });
 
   const saveShortcut = (value: string | null) =>
@@ -519,6 +533,36 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
 
         {tab === "data" && (
           <>
+            <div className="section">
+              <span className="section-title">{t("data.title")}</span>
+              <div className="field">
+                <span className="label">{t("data.current")}</span>
+                <div className="input"><input className="input-el mono" readOnly value={dataLoc?.path ?? ""} title={dataLoc?.path} /></div>
+                <div className="help">{dataLoc?.isDefault ? t("data.isDefault") : t("data.isCustom")}</div>
+              </div>
+              {confirmExisting ? (
+                <>
+                  <Alert kind="info">{t("data.existingWarn")}</Alert>
+                  <div className="btns">
+                    <button className="btn btn-primary btn-sm" onClick={() => changeLocation("existing", false)}>{t("data.continue")}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmExisting(false)}>{t("common.cancel")}</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="help">{t("data.moveHelp")}</div>
+                  <div className="btns">
+                    <button className="btn btn-secondary btn-sm" onClick={() => changeLocation("folder", true)}>{t("data.moveTo")}</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setConfirmExisting(true)}>{t("data.useExisting")}</button>
+                    {dataLoc && !dataLoc.isDefault && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => changeLocation("default", true)}>{t("data.backDefault")}</button>
+                    )}
+                  </div>
+                  <Note>{t("data.syncNote")}</Note>
+                </>
+              )}
+            </div>
+
             <div className="section">
               <span className="section-title">{t("settings.backup")}</span>
               {importFile ? (

@@ -36,6 +36,7 @@ If you work with many clients and keep each one's credentials in its own KeePass
 - 🔎 **Instant search** as you type, ignoring case and accents.
 - ⌨️ **Keyboard-first:** type, ↑↓ arrows and **Enter** to open.
 - 🗂️ **Browse the vault without opening KeePassXC:** groups, entries with their icons, search, copy username/password/TOTP code, notes in **Markdown** and **attachment** download. Read-only.
+- 📤 **Report to share:** copies as text the credentials of one entry, or of the ones you pick in a folder, to paste into a secret-sharing tool with expiring links (Password Pusher and the like). With security warnings; it never reaches the Windows history and the clipboard clears itself.
 - ⭐ **Favorites and recents:** pin your most-used clients on top; the rest is sorted by last use (or alphabetically).
 - 📁 **Import whole folders:** the client takes the name of the folder that contains the `.kdbx`. No duplicates.
 - 🏷️ **Tags** ("Hosting", "Accounting"…) to group clients and filter the list with one click; they are searchable too.
@@ -45,6 +46,7 @@ If you work with many clients and keep each one's credentials in its own KeePass
 - 🪟 **Always at hand:** it lives in the system tray and opens from any application with a configurable **global shortcut** (`Ctrl + Alt + K` by default).
 - 🔔 **New-version notices** with the download link; you can ignore a version or turn the check off.
 - 🚀 **Start with Windows** (optional): it starts hidden in the tray and locked, ready for the shortcut.
+- 📍 **You choose where the data file is stored** (on first run or later in *Settings → Data*): move it to another folder or use one you already have, for example from another computer.
 - 💾 **Export and import** the whole configuration in an encrypted file, for backups or moving to another computer.
 - 🌗 **Light, dark or system theme**, your choice.
 - 🌍 **Spanish and English.** It picks one automatically from the Windows language (Spanish if it is Spanish, English otherwise) and you can fix it in Settings.
@@ -79,7 +81,7 @@ Linux and macOS are not available yet; the code is prepared for them and they wi
 
 Type part of the client's name and press **Enter** (or click its row): the vault opens **inside the app**, with its groups and entries. If the client has no saved password or keyfile, it opens in KeePassXC directly. With **Shift + Enter** (or the "Open in KeePassXC" button inside the vault) it always opens in KeePassXC, already unlocked.
 
-Inside the vault: `↑` `↓` and **Enter** to move and open, **Esc** to go up a level. On each entry you can **copy** the username, password, one-time code (TOTP) or notes, **show** the password for a few seconds, open the address (you see the real link first) and **save attachments**. Notes are read as **Markdown** (you can switch to plain text). It is read-only: to edit, open the vault in KeePassXC.
+Inside the vault: `↑` `↓` and **Enter** to move and open, **Esc** to go up a level. From an entry (or from a folder, choosing which ones) you can generate a **report to share**: a warning reminds you to send it with an expiring-link secret tool, not by email or chat. On each entry you can **copy** the username, password, one-time code (TOTP) or notes, **show** the password for a few seconds, open the address (you see the real link first) and **save attachments**. Notes are read as **Markdown** (you can switch to plain text). It is read-only: to edit, open the vault in KeePassXC.
 
 | Shortcut | Action |
 | --- | --- |
@@ -122,6 +124,16 @@ In **Settings → Data → Backup**:
 
 Paths are imported as they are: if the `.kdbx` files live at a different path on the new computer, the watched folders will tell you which ones they can't find so you can remove them or add them again.
 
+### Syncing between computers (OneDrive, Google Drive…)
+
+Keep the data file in a synced folder (**Settings → Data → Move to another folder…**) and, on the other computer, choose **Use an existing file…** on first run and point to that `vaults.enc`. It opens with the same master password.
+
+- **Changes from several computers:** when you return to the window the app picks up whatever another computer saved, and when saving it applies your change *on top of* the latest file instead of overwriting it. If you change the master password on one computer, the others will ask you to unlock again with the new one.
+- **Different versions:** if one computer has a newer version than another and the file format changes, the older version **neither opens nor modifies it**: it tells you to update the app (with a button to download it). Fields a newer version adds are kept even if an older one saves the file. It is best to run the same version everywhere; versions before 0.3.1 do not perform this check.
+- **Windows Hello** is per computer: enable it on each one.
+- **What is not synced:** preferences (theme, shortcut, file location…) are per computer. `.kdbx` paths are stored as they are, so if they live at a different path on another computer (another Windows user, another drive letter) you will have to fix them.
+- Avoid opening the app on two computers at once editing the same thing. If the sync service creates a conflict copy (`vaults (1).enc`), keep the one you want and delete it from the rest with **Use an existing file…**.
+
 ### Updates
 
 When you open the app (and every 24 hours if you leave it open) KP Manager checks GitHub for a newer version. If there is one, it tells you with the **link to the download page**, and you can choose:
@@ -162,7 +174,7 @@ Where it stores its data (in `%APPDATA%\kpmanager\KPManager\config`):
 
 | File | Contents |
 | --- | --- |
-| `vaults.enc` | Clients, paths, saved credentials and watched folders. **Encrypted.** |
+| `vaults.enc` | Clients, paths, saved credentials and watched folders. **Encrypted.** You can keep it in another folder (*Settings → Data*); `prefs.json` remembers where. |
 | `hello.bin` | Master password protected by Windows Hello. **Encrypted.** |
 | `prefs.json` | Theme, language, shortcut, sort order and window options. No sensitive data. |
 

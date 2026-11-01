@@ -40,6 +40,8 @@ pub struct Prefs {
     pub hide_from_capture: bool,
     /// Mostrar los iconos de grupos y entradas del vault.
     pub show_vault_icons: bool,
+    /// Fichero de datos cifrado elegido por el usuario; `None` = la ubicación predeterminada.
+    pub data_file: Option<String>,
 }
 
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
@@ -61,6 +63,7 @@ impl Default for Prefs {
             vault_idle_minutes: 5,
             hide_from_capture: true,
             show_vault_icons: true,
+            data_file: None,
         }
     }
 }

@@ -204,3 +204,8 @@ button { font-family: inherit; }
 .sc-row { display: flex; align-items: center; gap: 12px; font-size: var(--kp-fs-sm); color: var(--kp-text-2); }
 .sc-keys { flex: none; width: 128px; display: inline-flex; gap: 4px; }
 .sc-keys kbd { font-family: var(--kp-font-mono); font-size: 11px; font-weight: 600; color: var(--kp-text-2); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--kp-glass-border); background: var(--kp-glass-soft); box-shadow: 0 1px 0 var(--kp-glass-edge); }
+.alert .warn-toggle { color: inherit; font-weight: 650; }
+.alert .warn-more { margin-top: 6px; }
+.dataloc { margin-top: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; max-width: 320px; text-align: left; }
+.dataloc-path { font-family: var(--kp-font-mono); overflow-wrap: anywhere; user-select: text; }
+.dataloc .btns { display: flex; gap: 8px; flex-wrap: wrap; }

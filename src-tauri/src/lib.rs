@@ -39,11 +39,16 @@ pub fn run() {
             let dir = ProjectDirs::from("com", "kpmanager", "KPManager")
                 .map(|d| d.config_dir().to_path_buf())
                 .unwrap_or(app.path().app_config_dir()?);
-            app.manage(store::Store::new(dir.join("vaults.enc")));
+            // `prefs.json` y `hello.bin` se quedan siempre en la carpeta de configuración local: el primero
+            // guarda dónde está el fichero de datos y el segundo solo vale en este equipo.
+            let prefs = prefs::PrefsState::load(dir.join("prefs.json"));
+            let default_data = dir.join("vaults.enc");
+            let data_file = prefs.get().data_file.map(std::path::PathBuf::from).unwrap_or_else(|| default_data.clone());
+            app.manage(commands::DefaultDataFile(default_data));
+            app.manage(store::Store::new(data_file));
             app.manage(hello::Hello::new(dir.join("hello.bin")));
             app.manage(vaultdb::Session::default());
             app.manage(clipboard::Clipboard::default());
-            let prefs = prefs::PrefsState::load(dir.join("prefs.json"));
             let shortcut = prefs.get().shortcut;
             app.manage(prefs);
             shell::setup_tray(app.handle())?;
@@ -72,6 +77,9 @@ pub fn run() {
             commands::hello_enable,
             commands::hello_disable,
             commands::reset_data,
+            commands::data_location,
+            commands::sync_data,
+            commands::change_data_location,
             commands::export_config,
             commands::import_config,
             commands::hello_unlock,
@@ -108,6 +116,7 @@ pub fn run() {
             commands::entry_detail,
             commands::entry_totp,
             commands::reveal_secret,
+            commands::copy_report,
             commands::copy_secret,
             commands::save_attachment,
             commands::open_link,

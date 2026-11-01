@@ -506,6 +506,74 @@ pub fn attachment(db: &Database, entry_id: &str, name: &str) -> Result<Zeroizing
     Ok(Zeroizing::new(a.data.get().clone()))
 }
 
+// ───────────────────────── Informe para compartir ─────────────────────────
+
+/// Tope de entradas por informe: es para enviar unas pocas credenciales, no para volcar un vault.
+pub const MAX_REPORT_ENTRIES: usize = 100;
+
+/// Qué incluir además de título, usuario, contraseña y dirección.
+#[derive(Clone, Copy)]
+pub struct ReportOptions {
+    pub include_custom: bool,
+    pub include_notes: bool,
+}
+
+/// Etiquetas del informe en el idioma de la interfaz (cualquier otro idioma usa inglés).
+fn labels(lang: &str) -> (&'static str, &'static str, &'static str, &'static str) {
+    match lang {
+        "es" => ("Usuario", "Contraseña", "Dirección", "Notas"),
+        _ => ("Username", "Password", "Address", "Notes"),
+    }
+}
+
+/// Texto plano listo para pegar en una herramienta de compartir secretos. Se construye aquí, en Rust:
+/// las contraseñas no pasan por la interfaz. Nunca incluye el código TOTP (caduca en segundos) ni su semilla,
+/// ni adjuntos. Los campos vacíos se omiten.
+pub fn report(db: &Database, entry_ids: &[String], opts: ReportOptions, lang: &str) -> Result<Zeroizing<String>> {
+    if entry_ids.is_empty() || entry_ids.len() > MAX_REPORT_ENTRIES {
+        return Err(AppError::msg("reportCount"));
+    }
+    let (l_user, l_pass, l_url, l_notes) = labels(lang);
+    let mut out = Zeroizing::new(String::with_capacity(512 * entry_ids.len()));
+    for (i, raw) in entry_ids.iter().enumerate() {
+        let e = db.entry(parse_entry_id(raw)?).ok_or(AppError::NotFound)?;
+        if i > 0 {
+            out.push('\n');
+        }
+        let title = e.get_title().filter(|t| !t.trim().is_empty()).unwrap_or("-");
+        out.push_str(&format!("== {} ==\n", one_line(title)));
+        let mut line = |label: &str, value: Option<&str>| {
+            if let Some(v) = value.filter(|v| !v.is_empty()) {
+                out.push_str(&format!("{label}: {}\n", one_line(v)));
+            }
+        };
+        line(l_user, e.get(fields::USERNAME));
+        line(l_pass, e.get(fields::PASSWORD));
+        line(l_url, e.get(fields::URL));
+        if opts.include_custom {
+            let mut names: Vec<&String> = e.fields.keys().filter(|k| is_custom_field(k)).collect();
+            names.sort();
+            for name in names {
+                line(&one_line(name), e.get(name));
+            }
+        }
+        if opts.include_notes {
+            if let Some(n) = e.get(fields::NOTES).filter(|n| !n.trim().is_empty()) {
+                out.push_str(&format!("{l_notes}:\n"));
+                for l in n.lines() {
+                    out.push_str(&format!("  {l}\n"));
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Un valor de una sola línea: los saltos dentro de un campo no deben partir el informe.
+fn one_line(s: &str) -> String {
+    s.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -687,5 +755,52 @@ mod tests {
         assert!(s.close_if_idle(Duration::ZERO));
         assert!(!s.is_open());
         assert!(s.with("1", |_| Ok(())).is_err());
+    }
+
+    #[test]
+    fn report_contains_only_the_selected_entries_and_no_totp() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut vault = sample(dir.path(), tiny_png());
+        // Segunda entrada, que no se selecciona.
+        let mut db = open(&vault).unwrap();
+        let gid = db.root().group_ids().next().unwrap();
+        {
+            let mut g = db.group_mut(gid).unwrap();
+            let mut e = g.add_entry();
+            e.set_unprotected(fields::TITLE, "Otra");
+            e.set_protected(fields::PASSWORD, "NO-INCLUIR");
+        }
+        let mut f = File::create(&vault.path).unwrap();
+        db.save(&mut f, DatabaseKey::new().with_password(PW)).unwrap();
+        vault.password = Some(Zeroizing::new(PW.into()));
+        let db = open(&vault).unwrap();
+        let t = tree(&db, true);
+        let panel = t.entries.iter().find(|e| e.title == "Panel").unwrap().id.clone();
+
+        let opts = ReportOptions { include_custom: false, include_notes: false };
+        let r = report(&db, &[panel.clone()], opts, "es").unwrap();
+        assert!(r.contains("== Panel ==") && r.contains("Usuario: admin") && r.contains("Contraseña: SECRETO-123"));
+        assert!(r.contains("Dirección: https://example.com"));
+        for no in ["NO-INCLUIR", "Otra", "CLAVE-EN-NOTA", "TOKEN-XYZ", "A-1", "JBSWY3DPEHPK3PXP", "otpauth", "contenido"] {
+            assert!(!r.contains(no), "no debería incluir {no}");
+        }
+
+        let full = report(&db, &[panel], ReportOptions { include_custom: true, include_notes: true }, "en").unwrap();
+        assert!(full.contains("Password: SECRETO-123") && full.contains("API key: TOKEN-XYZ") && full.contains("Cuenta: A-1"));
+        assert!(full.contains("Notes:\n  nota con CLAVE-EN-NOTA"));
+        assert!(!full.contains("JBSWY3DPEHPK3PXP") && !full.contains("otpauth"), "ni la semilla TOTP ni el campo otp");
+    }
+
+    #[test]
+    fn report_rejects_bad_selections_and_flattens_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = open(&sample(dir.path(), tiny_png())).unwrap();
+        let id = tree(&db, true).entries[0].id.clone();
+        let opts = ReportOptions { include_custom: true, include_notes: true };
+        assert!(report(&db, &[], opts, "es").is_err());
+        assert!(report(&db, &vec![id.clone(); MAX_REPORT_ENTRIES + 1], opts, "es").is_err());
+        assert!(report(&db, &["no-es-un-uuid".into()], opts, "es").is_err());
+        assert!(report(&db, &[Uuid::new_v4().simple().to_string()], opts, "es").is_err());
+        assert_eq!(one_line("a\r\nb\nc\rd"), "a b c d");
     }
 }

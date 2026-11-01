@@ -1,5 +1,8 @@
 //! Formato de fichero: `KPM1 | m_kib u32 | t u32 | p u32 | salt[16] | nonce[24] | ciphertext`.
 //! La cabecera (hasta el salt) se autentica como AAD.
+//!
+//! Un cambio incompatible del contenedor cambiaría la marca (`KPM2`…). Una versión que no lo entiende lo
+//! reconoce por el prefijo `KPM` y pide actualizar la aplicación en vez de fallar con un error genérico.
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{rand_core::RngCore, Aead, AeadCore, KeyInit, OsRng, Payload};
@@ -9,6 +12,7 @@ use zeroize::Zeroizing;
 use crate::error::{AppError, Result};
 
 const MAGIC: &[u8; 4] = b"KPM1";
+const MAGIC_PREFIX: &[u8; 3] = b"KPM";
 const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 24;
 const HEADER_LEN: usize = 4 + 12 + SALT_LEN;
@@ -71,10 +75,39 @@ impl Keys {
         Ok(out)
     }
 
-    pub fn decrypt(password: &str, blob: &[u8]) -> Result<(Self, Zeroizing<Vec<u8>>)> {
-        if blob.len() < HEADER_LEN + NONCE_LEN + 16 || &blob[..4] != MAGIC {
+    /// ¿Parece un fichero de datos de KP Manager (de esta versión o de una más nueva)? Solo mira la cabecera.
+    pub fn looks_valid(blob: &[u8]) -> bool {
+        blob.len() >= HEADER_LEN + NONCE_LEN + 16 && &blob[..3] == MAGIC_PREFIX
+    }
+
+    /// Comprueba la marca: `BadFormat` si no es de KP Manager y `dataNewer` si es de una versión más nueva.
+    fn check_magic(blob: &[u8]) -> Result<()> {
+        if !Self::looks_valid(blob) {
             return Err(AppError::BadFormat);
         }
+        if &blob[..4] != MAGIC {
+            return Err(AppError::msg_arg("dataNewer", ""));
+        }
+        Ok(())
+    }
+
+    /// Descifra con la clave que ya se tiene. Falla con `dataKeyChanged` si el fichero se volvió a cifrar con otra
+    /// contraseña maestra (otro equipo la cambió): hay que desbloquear de nuevo.
+    pub fn open_with_key(&self, blob: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
+        Self::check_magic(blob)?;
+        if blob[4..HEADER_LEN] != self.header()[4..] {
+            return Err(AppError::msg("dataKeyChanged"));
+        }
+        let cipher = XChaCha20Poly1305::new((&*self.key).into());
+        let nonce = XNonce::from_slice(&blob[HEADER_LEN..HEADER_LEN + NONCE_LEN]);
+        let pt = cipher
+            .decrypt(nonce, Payload { msg: &blob[HEADER_LEN + NONCE_LEN..], aad: &blob[..HEADER_LEN] })
+            .map_err(|_| AppError::BadFormat)?;
+        Ok(Zeroizing::new(pt))
+    }
+
+    pub fn decrypt(password: &str, blob: &[u8]) -> Result<(Self, Zeroizing<Vec<u8>>)> {
+        Self::check_magic(blob)?;
         let u32_at = |i: usize| u32::from_le_bytes(blob[i..i + 4].try_into().unwrap());
         let cost = KdfCost { m_kib: u32_at(4), t: u32_at(8), p: u32_at(12) };
         // Evita que un fichero manipulado fuerce un coste absurdo.
@@ -125,5 +158,24 @@ mod tests {
     #[test]
     fn rejects_garbage() {
         assert!(matches!(Keys::decrypt("a", b"nope"), Err(AppError::BadFormat)));
+    }
+
+    #[test]
+    fn newer_container_is_recognised_and_open_with_key_follows_the_file() {
+        let k = Keys::new("a", FAST).unwrap();
+        let mut blob = k.encrypt(b"hola").unwrap();
+        assert_eq!(&*k.open_with_key(&blob).unwrap(), b"hola");
+
+        // Otro equipo cambió la contraseña: nueva sal, la clave que tenemos ya no sirve.
+        let other = Keys::new("a", FAST).unwrap().encrypt(b"x").unwrap();
+        assert!(matches!(k.open_with_key(&other), Err(AppError::Msg { code: "dataKeyChanged", .. })));
+
+        blob[3] = b'2';
+        assert!(Keys::looks_valid(&blob));
+        assert!(matches!(Keys::decrypt("a", &blob), Err(AppError::Msg { code: "dataNewer", .. })));
+        assert!(matches!(k.open_with_key(&blob), Err(AppError::Msg { code: "dataNewer", .. })));
+        blob[..3].copy_from_slice(b"XYZ");
+        assert!(!Keys::looks_valid(&blob));
+        assert!(matches!(Keys::decrypt("a", &blob), Err(AppError::BadFormat)));
     }
 }

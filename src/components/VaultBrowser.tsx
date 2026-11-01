@@ -2,9 +2,10 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { api, EntryDetail, EntryRow, errMsg, GroupNode, Prefs, Totp, Vault, VaultTree } from "../api";
 import { useT } from "../i18n";
 import {
-  IconAlert, IconBack, IconClock, IconCopy, IconDownload, IconExternal, IconEye, IconEyeOff, IconFolder, IconPaperclip, IconSearch, IconX,
+  IconAlert, IconBack, IconClock, IconCopy, IconDownload, IconExternal, IconEye, IconEyeOff, IconFolder, IconPaperclip, IconReport, IconSearch, IconX,
 } from "./Icons";
 import { Markdown } from "./Markdown";
+import { ReportDialog } from "./ReportDialog";
 import { VaultIcon } from "./VaultIcon";
 
 const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
@@ -32,6 +33,8 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
   const [cursor, setCursor] = useState(0);
   const [link, setLink] = useState<string | null>(null);
   const [showEmpty, setShowEmpty] = useState(false);
+  // Informe para compartir: entradas candidatas (una sola = desde su ficha) y carpeta de la que salen.
+  const [report, setReport] = useState<{ rows: EntryRow[]; where: string } | null>(null);
   const deferred = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -110,7 +113,7 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
       if (items[cur]) pick(items[cur]);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      up();
+      if (!report) up();
     }
   }
 
@@ -154,6 +157,12 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
     </div>
   );
 
+  const reportDialog = report && (
+    <ReportDialog vault={vault} rows={report.rows} where={report.where} prefs={prefs} onClose={() => setReport(null)} notify={notify} />
+  );
+  // Entradas visibles ahora mismo (carpeta actual o resultados de la búsqueda): candidatas al informe.
+  const visibleEntries = items.flatMap((it) => (it.kind === "entry" ? [it.e] : []));
+
   if (entry) {
     return (
       <>
@@ -167,8 +176,11 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
           onBack={() => setEntry(null)}
           onLink={setLink}
           notify={notify}
+          paused={!!report}
+          onReport={() => setReport({ rows: [entry], where: groupPath(entry.group) })}
         />
         {confirmLink}
+        {reportDialog}
       </>
     );
   }
@@ -193,6 +205,11 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
               ))}
             </nav>
           </div>
+          {visibleEntries.length > 0 && (
+            <button className="btn btn-icon" onClick={() => setReport({ rows: visibleEntries, where: query ? "" : groupPath(here) })} aria-label={t("report.tip")}>
+              <IconReport /><span className="tip end">{t("report.tip")}</span>
+            </button>
+          )}
           <button className="btn btn-icon" onClick={onOpenKeepass} aria-label={t("vault.openKeepass")}>
             <IconExternal /><span className="tip end">{t("vault.openKeepass")}</span>
           </button>
@@ -242,6 +259,7 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
         </div>
       )}
       {confirmLink}
+      {reportDialog}
     </>
   );
 }
@@ -257,6 +275,9 @@ interface EntryProps {
   onBack: () => void;
   onLink: (url: string) => void;
   notify: Notify;
+  /** Con un diálogo encima, Esc cierra el diálogo y no debe volver atrás. */
+  paused: boolean;
+  onReport: () => void;
 }
 
 const NOTES_KEY = "kp.notesMode";
@@ -270,7 +291,7 @@ const readMode = (): "md" | "text" => {
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
-function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notify }: EntryProps) {
+function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notify, paused, onReport }: EntryProps) {
   const t = useT();
   const [d, setD] = useState<EntryDetail | null>(null);
   const [error, setError] = useState("");
@@ -292,10 +313,10 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
   }, [vault.id, row.id]);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && onBack();
+    const h = (e: KeyboardEvent) => e.key === "Escape" && !paused && onBack();
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onBack]);
+  }, [onBack, paused]);
 
   // Código TOTP: se pide a Rust (la semilla no sale de allí) y se renueva al caducar.
   const loadTotp = useCallback(() => {
@@ -400,6 +421,9 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
             <span className="vb-name">{row.title || t("vault.untitled")}</span>
             <span className="crumbs"><span className="crumb on">{[vault.client, groupName].filter(Boolean).join(" › ")}</span></span>
           </div>
+          <button className="btn btn-icon" onClick={onReport} aria-label={t("report.tip")}>
+            <IconReport /><span className="tip end">{t("report.tip")}</span>
+          </button>
           {prefs.showVaultIcons && row.icon && <span className="vicon big"><VaultIcon icon={row.icon} kind="entry" custom={custom} /></span>}
         </div>
       </div>

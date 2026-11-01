@@ -36,6 +36,7 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🔎 **Búsqueda instantánea** mientras escribes, sin distinguir mayúsculas ni acentos.
 - ⌨️ **Todo con teclado:** escribe, flechas ↑↓ y **Enter** para abrir.
 - 🗂️ **Navega el vault sin abrir KeePassXC:** grupos, entradas con sus iconos, búsqueda, copiar usuario/contraseña/código TOTP, notas en **Markdown** y descarga de **adjuntos**. Solo lectura.
+- 📤 **Informe para compartir:** copia en texto las credenciales de una entrada, o de las que elijas de una carpeta, para pegarlas en una herramienta de compartir secretos con enlaces que caducan (Password Pusher y similares). Con avisos de seguridad; sin pasar por el historial de Windows y con borrado automático del portapapeles.
 - ⭐ **Favoritos y recientes:** fija arriba los clientes que más usas; el resto se ordena por último uso (o alfabéticamente).
 - 📁 **Importar carpetas enteras:** el cliente toma el nombre de la carpeta que contiene el `.kdbx`. Sin duplicados.
 - 🏷️ **Etiquetas** («Hosting», «Contabilidad»…) para agrupar clientes y filtrar la lista con un clic; también se buscan.
@@ -45,6 +46,7 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🪟 **Siempre a mano:** vive en la bandeja del sistema y se abre desde cualquier aplicación con un **atajo global** configurable (por defecto `Ctrl + Alt + K`).
 - 🔔 **Aviso de versiones nuevas** con el enlace de descarga; puedes ignorar una versión o desactivar la comprobación.
 - 🚀 **Inicio con Windows** (opcional): arranca oculta en la bandeja y bloqueada, lista para el atajo.
+- 📍 **Tú eliges dónde se guarda el fichero de datos** (en el primer arranque o luego en *Ajustes → Datos*): muévelo a otra carpeta o usa uno que ya tengas, por ejemplo el de otro equipo.
 - 💾 **Exportar e importar** toda la configuración en un fichero cifrado, para hacer copias o cambiar de equipo.
 - 🌗 **Tema claro, oscuro o el del sistema**, a tu elección.
 - 🌍 **Español e inglés.** Se elige solo según el idioma de Windows (español si lo es, inglés en cualquier otro caso) y se puede fijar en Ajustes.
@@ -79,7 +81,7 @@ Linux y macOS no están disponibles todavía; el código está preparado para el
 
 Escribe parte del nombre del cliente y pulsa **Enter** (o haz clic en su fila): el vault se abre **dentro de la app**, con sus grupos y entradas. Si el cliente no tiene contraseña ni keyfile guardadas, se abre directamente en KeePassXC. Con **Mayús + Enter** (o el botón «Abrir en KeePassXC» dentro del vault) se abre siempre en KeePassXC, ya desbloqueado.
 
-Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Esc** para subir un nivel. En cada entrada puedes **copiar** el usuario, la contraseña, el código de un solo uso (TOTP) o las notas, **mostrar** la contraseña unos segundos, abrir la dirección (se te muestra el enlace real antes) y **guardar los adjuntos**. Las notas se leen como **Markdown** (puedes cambiar a texto plano). Es de solo lectura: para editar, abre el vault en KeePassXC.
+Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Esc** para subir un nivel. En cada entrada (o desde la carpeta, eligiendo cuáles) puedes generar un **informe para compartir**: aparece un aviso para que lo envíes con una herramienta de secretos con enlace que caduque y no por correo ni chat. En cada entrada puedes **copiar** el usuario, la contraseña, el código de un solo uso (TOTP) o las notas, **mostrar** la contraseña unos segundos, abrir la dirección (se te muestra el enlace real antes) y **guardar los adjuntos**. Las notas se leen como **Markdown** (puedes cambiar a texto plano). Es de solo lectura: para editar, abre el vault en KeePassXC.
 
 | Atajo | Acción |
 | --- | --- |
@@ -122,6 +124,16 @@ En **Ajustes → Datos → Copia de seguridad**:
 
 Las rutas se importan tal cual: si los `.kdbx` están en otra ruta en el equipo nuevo, las carpetas en seguimiento te avisarán de los que no encuentra para que los quites o los vuelvas a añadir.
 
+### Sincronizar entre equipos (OneDrive, Google Drive…)
+
+Guarda el fichero de datos en una carpeta sincronizada (**Ajustes → Datos → Mover a otra carpeta…**) y, en el otro equipo, en el primer arranque elige **Usar un fichero existente…** y señala ese `vaults.enc`. Se abre con la misma contraseña maestra.
+
+- **Cambios de varios equipos:** al volver a la ventana la app recoge lo que otro equipo haya guardado, y al guardar aplica tu cambio *encima* del último fichero, en lugar de pisarlo. Si cambias la contraseña maestra en un equipo, los demás te pedirán desbloquear de nuevo con la nueva.
+- **Versiones distintas:** si un equipo tiene una versión más nueva que otro y el formato del fichero cambia, la versión antigua **no lo abre ni lo modifica**: te dice que actualices la aplicación (con un botón para descargarla). Los campos que una versión más nueva añada se conservan aunque otra más antigua guarde el fichero. Conviene tener la misma versión en todos los equipos; las anteriores a la 0.3.1 no hacen esta comprobación.
+- **Windows Hello** es de cada equipo: actívalo en cada uno.
+- **Qué no se sincroniza:** las preferencias (tema, atajo, ubicación del fichero…) son de cada equipo. Las rutas de los `.kdbx` se guardan tal cual, así que si en otro equipo están en otra ruta (otro usuario de Windows, otra letra de unidad) tendrás que corregirlas.
+- Evita abrir la app a la vez en dos equipos editando lo mismo. Si el servicio de sincronización crea una copia en conflicto (`vaults (1).enc`), conserva la que quieras y bórrala del resto con **Usar un fichero existente…**.
+
 ### Actualizaciones
 
 Al abrir la app (y cada 24 horas si la dejas abierta) KP Manager mira en GitHub si hay una versión más reciente. Si la hay, te lo dice con el **enlace a la página de descarga**, y puedes elegir:
@@ -162,7 +174,7 @@ Dónde guarda sus datos (en `%APPDATA%\kpmanager\KPManager\config`):
 
 | Fichero | Contenido |
 | --- | --- |
-| `vaults.enc` | Clientes, rutas, credenciales guardadas y carpetas en seguimiento. **Cifrado.** |
+| `vaults.enc` | Clientes, rutas, credenciales guardadas y carpetas en seguimiento. **Cifrado.** Puedes guardarlo en otra carpeta (*Ajustes → Datos*); `prefs.json` recuerda dónde. |
 | `hello.bin` | Contraseña maestra protegida por Windows Hello. **Cifrado.** |
 | `prefs.json` | Tema, idioma, atajo, orden y opciones de ventana. Sin datos sensibles. |
 
