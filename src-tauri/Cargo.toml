@@ -1,6 +1,6 @@
 [package]
 name = "kpmanager"
-version = "0.2.0"
+version = "0.3.0"
 description = "Gestor de múltiples vaults de KeePassXC"
 authors = ["fmartineze"]
 license = "MIT"
@@ -31,13 +31,18 @@ uuid = { version = "1", features = ["v4"] }
 directories = "6"
 thiserror = "2"
 sha2 = "0.10"
+keepass = { version = "0.17.0", default-features = false, features = ["totp"] }
+
+[target.'cfg(not(windows))'.dependencies]
+arboard = { version = "3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
-windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Storage_Streams", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Storage_Streams", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole"] }
 
 [dev-dependencies]
 tempfile = "3"
+keepass = { version = "0.17.0", features = ["save_kdbx4", "totp"] }
 
 [profile.release]
 codegen-units = 1

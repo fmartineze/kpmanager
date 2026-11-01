@@ -5,9 +5,11 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
+use crate::clipboard::Clipboard;
 use crate::error::{AppError, Result};
 use crate::prefs::PrefsState;
 use crate::store::Store;
+use crate::vaultdb::Session;
 
 /// Trae la ventana al frente (aunque esté minimizada u oculta en la bandeja) y pide enfocar el buscador.
 pub fn show_main(app: &AppHandle) {
@@ -16,6 +18,35 @@ pub fn show_main(app: &AppHandle) {
         let _ = w.unminimize();
         let _ = w.set_focus();
         let _ = app.emit("focus-search", ());
+    }
+}
+
+/// Bloquea todo lo sensible: la configuración cifrada, el vault abierto y el portapapeles.
+/// No avisa a la interfaz: la usa el comando `lock`, que ya viene de ella.
+pub fn lock_state(app: &AppHandle) {
+    app.state::<Store>().lock();
+    close_vault(app);
+    app.state::<Clipboard>().clear_if_ours();
+}
+
+/// Como `lock_state`, pero pide además a la interfaz que pase a la pantalla de bloqueo
+/// (bandeja, ocultar la ventana). Si la interfaz llamara a esto, su propio evento la haría bloquear otra vez
+/// en bucle y deshacería cualquier desbloqueo.
+pub fn lock_all(app: &AppHandle) {
+    lock_state(app);
+    let _ = app.emit("lock-request", ());
+}
+
+/// Cierra el vault que se está navegando y devuelve la ventana a su estado normal.
+pub fn close_vault(app: &AppHandle) {
+    app.state::<Session>().close();
+    protect_window(app, false);
+}
+
+/// Excluye la ventana de capturas de pantalla y de compartir pantalla.
+pub fn protect_window(app: &AppHandle, on: bool) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_content_protected(on);
     }
 }
 
@@ -58,10 +89,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, ev| match ev.id.as_ref() {
             "open" => show_main(app),
-            "lock" => {
-                app.state::<Store>().lock();
-                let _ = app.emit("lock-request", ());
-            }
+            "lock" => lock_all(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -84,9 +112,7 @@ pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
     // Oculta la ventana y, si está configurado, bloquea antes de que quede fuera de la vista.
     let hide = |window: &tauri::Window| {
         if prefs.lock_on_hide {
-            let app = window.app_handle();
-            app.state::<Store>().lock();
-            let _ = app.emit("lock-request", ());
+            lock_all(window.app_handle());
         }
         let _ = window.hide();
     };

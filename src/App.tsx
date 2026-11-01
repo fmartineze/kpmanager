@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { api, errMsg, HelloStatus, Prefs, SyncReport, Vault } from "./api";
+import { api, errMsg, HelloStatus, Prefs, SyncReport, Vault, VaultTree } from "./api";
 import { listen } from "@tauri-apps/api/event";
 import { rich, setLanguagePref, translate, useLang, useT } from "./i18n";
 import { setThemePref } from "./theme";
@@ -11,6 +11,7 @@ import { SyncDialog } from "./components/SyncDialog";
 import { WatchDialog } from "./components/WatchDialog";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { OpenState, VaultList } from "./components/VaultList";
+import { VaultBrowser } from "./components/VaultBrowser";
 import { VaultForm } from "./components/VaultForm";
 import { ScanDialog } from "./components/ScanDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -61,11 +62,13 @@ export default function App() {
   const [hello, setHello] = useState<HelloStatus>({ supported: false, enabled: false });
   // Cuándo se pide Windows Hello solo: al arrancar sí; tras bloquear, solo al volver a la app (ver helloPolicy).
   const [helloMode, setHelloMode] = useState<HelloMode>("mount");
-  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto", checkUpdates: false, ignoredUpdate: null });
+  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto", checkUpdates: false, ignoredUpdate: null, clipboardClearSecs: 15, vaultIdleMinutes: 5, hideFromCapture: true, showVaultIcons: true });
   // Fila resaltada para abrir con Enter; solo se muestra al buscar o tras usar las flechas.
   const [cursor, setCursor] = useState(0);
   const [navigated, setNavigated] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  // Vault que se está navegando dentro de la app (en vez de abrirlo en KeePassXC).
+  const [browse, setBrowse] = useState<{ vault: Vault; tree: VaultTree } | null>(null);
   const deferred = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -183,6 +186,7 @@ export default function App() {
     setNavigated(false);
     setDialog(null);
     setOpening(null);
+    setBrowse(null); // Rust ya ha cerrado el vault; aquí se descarta lo que la interfaz tenía
     setIsNew(false);
     setPhase("locked");
   }, []);
@@ -236,6 +240,17 @@ export default function App() {
       unlisten.then((f) => f());
     };
   }, [phase, dialog]);
+
+  // Rust cierra el vault abierto tras un rato sin actividad.
+  useEffect(() => {
+    const unlisten = listen("vault-closed", () => {
+      setBrowse(null);
+      showToast(translate("vault.closedIdle"));
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [showToast]);
 
   // «Bloquear» desde el menú de la bandeja (Rust ya ha bloqueado el almacén).
   useEffect(() => {
@@ -297,6 +312,27 @@ export default function App() {
     }
   }
 
+  // Enter: navegar el vault dentro de la app. Si el cliente pide abrirse siempre en KeePassXC, o no tiene
+  // contraseña ni keyfile guardadas (no se puede descifrar sin preguntar), se abre en KeePassXC como siempre.
+  async function browseVault(v: Vault) {
+    if (v.openExternal || (!v.hasPassword && !v.keyfile)) return open(v);
+    setOpening({ id: v.id, phase: "opening" });
+    try {
+      const [tree] = await Promise.all([api.openTree(v.id), sleep(250)]);
+      setBrowse({ vault: v, tree });
+    } catch (e) {
+      showToast(errMsg(e), "error");
+    } finally {
+      setOpening(null);
+      refresh();
+    }
+  }
+
+  const closeBrowser = useCallback(() => {
+    setBrowse(null);
+    api.closeVault().catch(() => {});
+  }, []);
+
   async function toggleFavorite(v: Vault) {
     const favorite = !v.favorite;
     setVaults((vs) => vs.map((x) => (x.id === v.id ? { ...x, favorite } : x)));
@@ -317,7 +353,7 @@ export default function App() {
       setCursor((c) => (Math.min(c, filtered.length - 1) + step + filtered.length) % filtered.length);
     } else if (e.key === "Enter") {
       const v = filtered[cursorIdx];
-      if (v && !opening) open(v);
+      if (v && !opening) (e.shiftKey ? open(v) : browseVault(v));
     } else if (e.key === "Escape" && query) {
       setQuery("");
       setNavigated(false);
@@ -326,6 +362,7 @@ export default function App() {
 
   // Tras borrar todos los datos la app queda como en el primer arranque: crear contraseña maestra.
   const resetDone = useCallback(() => {
+    setBrowse(null);
     setVaults([]);
     setQuery("");
     setNavigated(false);
@@ -370,6 +407,35 @@ export default function App() {
 
   const q = query.trim();
   const filtering = !!q || !!tagFilter;
+
+  if (browse) {
+    return (
+      <Shell>
+        <VaultBrowser
+          vault={browse.vault}
+          tree={browse.tree}
+          prefs={prefs}
+          onBack={closeBrowser}
+          onOpenKeepass={() => {
+            const v = browse.vault;
+            closeBrowser();
+            open(v);
+          }}
+          notify={showToast}
+        />
+        {toast && (
+          <div className="toasts">
+            <div key={toast.key} className={`toast ${toast.kind === "error" ? "err" : "ok"}`} role="status">
+              <span className="toast-ic">{toast.kind === "error" ? <IconAlert className="s16" /> : <IconCheck className="s16" />}</span>
+              <div className="toast-txt">{toast.msg}</div>
+              <button className="btn btn-icon plain" onClick={() => setToast(null)} aria-label={t("toast.close")}><IconX className="s14" /></button>
+              <span className="toast-timer" />
+            </div>
+          </div>
+        )}
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
@@ -436,7 +502,7 @@ export default function App() {
         opening={opening}
         cursor={navigated || q ? cursorIdx : -1}
         onToggleFavorite={toggleFavorite}
-        onOpen={open}
+        onOpen={browseVault}
         onEdit={(v) => setDialog({ kind: "form", vault: v })}
         onAdd={() => setDialog({ kind: "form", vault: null })}
         onFolders={() => setDialog({ kind: "watch" })}

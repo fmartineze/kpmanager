@@ -27,14 +27,15 @@ Un lanzador rápido y seguro para quien mantiene un `.kdbx` por cliente.
 
 Si trabajas con muchos clientes y guardas las credenciales de cada uno en su propia base de datos de KeePass, abrirlas es un rodeo constante: buscar la carpeta, localizar el fichero, abrir KeePassXC, elegir el fichero, escribir la contraseña y apuntar el keyfile.
 
-**KP Manager** reúne todos esos vaults en una sola lista. Buscas el cliente, pulsas **Enter** y KeePassXC se abre con el vault ya desbloqueado.
+**KP Manager** reúne todos esos vaults en una sola lista. Buscas el cliente, pulsas **Enter** y recorres su vault desde la propia app (o **Mayús + Enter** para abrirlo en KeePassXC, ya desbloqueado).
 
-> KP Manager **no guarda las contraseñas de tus sitios web**: eso sigue siendo cosa de KeePassXC. Solo recuerda dónde está cada vault y, si quieres, con qué contraseña y keyfile se abre, y lo guarda todo cifrado.
+> KP Manager **no guarda las contraseñas de tus sitios web**: siguen en tus `.kdbx`. Solo recuerda dónde está cada vault y, si quieres, con qué contraseña y keyfile se abre, y lo guarda todo cifrado. Al navegar un vault lo lee en **solo lectura** y en memoria; no escribe nunca en el fichero.
 
 ## Características
 
 - 🔎 **Búsqueda instantánea** mientras escribes, sin distinguir mayúsculas ni acentos.
 - ⌨️ **Todo con teclado:** escribe, flechas ↑↓ y **Enter** para abrir.
+- 🗂️ **Navega el vault sin abrir KeePassXC:** grupos, entradas con sus iconos, búsqueda, copiar usuario/contraseña/código TOTP, notas en **Markdown** y descarga de **adjuntos**. Solo lectura.
 - ⭐ **Favoritos y recientes:** fija arriba los clientes que más usas; el resto se ordena por último uso (o alfabéticamente).
 - 📁 **Importar carpetas enteras:** el cliente toma el nombre de la carpeta que contiene el `.kdbx`. Sin duplicados.
 - 🏷️ **Etiquetas** («Hosting», «Contabilidad»…) para agrupar clientes y filtrar la lista con un clic; también se buscan.
@@ -76,14 +77,17 @@ Linux y macOS no están disponibles todavía; el código está preparado para el
 
 ### Abrir un vault
 
-Escribe parte del nombre del cliente y pulsa **Enter** (o haz clic en su fila). KeePassXC se abre con el vault listo. Verás «Abriendo…» y después «Abierto».
+Escribe parte del nombre del cliente y pulsa **Enter** (o haz clic en su fila): el vault se abre **dentro de la app**, con sus grupos y entradas. Si el cliente no tiene contraseña ni keyfile guardadas, se abre directamente en KeePassXC. Con **Mayús + Enter** (o el botón «Abrir en KeePassXC» dentro del vault) se abre siempre en KeePassXC, ya desbloqueado.
+
+Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Esc** para subir un nivel. En cada entrada puedes **copiar** el usuario, la contraseña, el código de un solo uso (TOTP) o las notas, **mostrar** la contraseña unos segundos, abrir la dirección (se te muestra el enlace real antes) y **guardar los adjuntos**. Las notas se leen como **Markdown** (puedes cambiar a texto plano). Es de solo lectura: para editar, abre el vault en KeePassXC.
 
 | Atajo | Acción |
 | --- | --- |
 | `Ctrl + F` | Ir al buscador |
 | `↑` `↓` | Moverse por la lista |
-| `Enter` | Abrir el vault resaltado |
-| `Esc` | Limpiar la búsqueda |
+| `Enter` | Navegar el vault resaltado |
+| `Mayús + Enter` | Abrir el vault resaltado en KeePassXC |
+| `Esc` | Limpiar la búsqueda / subir un nivel dentro de un vault |
 | `Ctrl + Alt + K` | Abrir KP Manager desde cualquier sitio *(configurable)* |
 
 ### Etiquetas
@@ -147,7 +151,11 @@ En **Ajustes → General → Inicio** puedes hacer que KP Manager arranque con e
 - **Cifrado:** tu contraseña maestra se convierte en una clave con **Argon2id** y todo se cifra con **XChaCha20-Poly1305**. Nada se guarda en texto claro.
 - **Contraseñas hacia KeePassXC:** viajan por la entrada estándar del proceso, **nunca** en la línea de comandos, donde cualquier programa podría verlas.
 - **Windows Hello:** la contraseña maestra se guarda cifrada con una clave que solo Windows entrega tras autenticarte con Hello. Copiar los ficheros de la app no sirve para abrirla.
-- **Tus `.kdbx` no se tocan:** KP Manager no los lee ni los modifica; solo los lanza en KeePassXC.
+- **Tus `.kdbx` no se modifican nunca.** Al navegar un vault se lee en solo lectura; el contenido descifrado vive solo en memoria y se descarta al volver atrás, al bloquear, al ocultar la ventana (si lo tienes activado) o tras 5 minutos sin actividad.
+- **Las contraseñas no llegan a la interfaz** salvo que pulses «Mostrar» (y se vuelven a ocultar a los 10 s). **Copiar** se hace desde el núcleo de la app, la semilla TOTP nunca sale de él, y el portapapeles se vacía solo (15 s por defecto) **si sigue conteniendo lo copiado**. En Windows no queda en el historial (Win+V) ni se sincroniza con la nube.
+- **Los vaults se tratan como contenido no fiable.** Las notas en Markdown se sanean (sin HTML, imágenes, scripts ni estilos); los enlaces se muestran con su dirección real antes de abrirse y solo se abren `http`, `https` y `mailto`; los iconos se validan; los adjuntos se guardan con un nombre saneado, eligiendo tú la ubicación y marcados como descargados de Internet; y un `.kdbx` que declare una derivación de clave desorbitada se rechaza antes de consumir memoria.
+- **Capturas:** mientras ves un vault la ventana se excluye de las capturas de pantalla y de compartir pantalla (desactivable en **Ajustes → Seguridad**).
+- **Límites conocidos:** como en cualquier aplicación, un volcado de memoria o el fichero de intercambio de Windows podrían contener datos descifrados mientras el vault está abierto. No compatible aún: claves YubiKey (desafío-respuesta) ni editar el vault.
 - **Sin cuentas ni telemetría.** La única conexión a internet es una consulta anónima a GitHub para saber si hay una versión nueva; no envía ningún dato tuyo y se puede desactivar en **Ajustes → Acerca de → Actualizaciones**.
 
 Dónde guarda sus datos (en `%APPDATA%\kpmanager\KPManager\config`):

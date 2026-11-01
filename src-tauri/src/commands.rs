@@ -15,6 +15,8 @@ use crate::shell;
 use crate::model::{Executable, Vault};
 use crate::scan::{self, Candidate, is_under, path_key};
 use crate::store::Store;
+use crate::vaultdb::{self, EntryDetail, Session, TotpView, TreeView};
+use crate::{attach, clipboard::Clipboard};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +29,7 @@ pub struct VaultView {
     favorite: bool,
     last_opened: Option<u64>,
     tags: Vec<String>,
+    open_external: bool,
 }
 
 impl From<&Vault> for VaultView {
@@ -40,6 +43,7 @@ impl From<&Vault> for VaultView {
             favorite: v.favorite,
             last_opened: v.last_opened,
             tags: v.tags.clone(),
+            open_external: v.open_external,
         }
     }
 }
@@ -56,6 +60,8 @@ pub struct VaultInput {
     clear_password: bool,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    open_external: bool,
 }
 
 impl VaultInput {
@@ -71,6 +77,7 @@ impl VaultInput {
         v.path = PathBuf::from(self.path.trim());
         v.keyfile = self.keyfile.filter(|k| !k.trim().is_empty()).map(PathBuf::from);
         v.tags = crate::model::normalize_tags(self.tags);
+        v.open_external = self.open_external;
         if self.clear_password {
             v.password = None;
         } else if let Some(p) = self.password.filter(|p| !p.is_empty()) {
@@ -111,8 +118,8 @@ pub fn unlock(store: State<Store>, password: String) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn lock(store: State<Store>) {
-    store.lock();
+pub fn lock(app: tauri::AppHandle) {
+    shell::lock_state(&app);
 }
 
 #[tauri::command]
@@ -306,6 +313,10 @@ pub struct PrefsUpdate {
     theme: String,
     language: String,
     check_updates: bool,
+    clipboard_clear_secs: u32,
+    vault_idle_minutes: u32,
+    hide_from_capture: bool,
+    show_vault_icons: bool,
 }
 
 #[tauri::command]
@@ -321,6 +332,10 @@ pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs>
         p.theme = theme;
         p.language = language;
         p.check_updates = update.check_updates;
+        p.clipboard_clear_secs = update.clipboard_clear_secs.min(600);
+        p.vault_idle_minutes = update.vault_idle_minutes.min(240);
+        p.hide_from_capture = update.hide_from_capture;
+        p.show_vault_icons = update.show_vault_icons;
     })
 }
 
@@ -551,6 +566,133 @@ pub fn delete_vaults(store: State<Store>, ids: Vec<String>) -> Result<usize> {
         d.vaults.retain(|v| !ids.contains(&v.id));
         Ok(before - d.vaults.len())
     })
+}
+
+// ───────────────────────── Navegar un vault (solo lectura) ─────────────────────────
+
+/// Abre el vault con las credenciales guardadas y devuelve su árbol, sin secretos.
+#[tauri::command]
+pub async fn open_tree(
+    app: tauri::AppHandle,
+    store: State<'_, Store>,
+    session: State<'_, Session>,
+    prefs: State<'_, PrefsState>,
+    id: String,
+) -> Result<TreeView> {
+    let vault = store.read(|d| d.vaults.iter().find(|v| v.id == id).cloned())?.ok_or(AppError::NotFound)?;
+    // Argon2 puede tardar segundos: fuera del hilo de la interfaz.
+    let db = blocking(move || vaultdb::open(&vault)).await?;
+    // Si mientras tanto se bloqueó la app, el vault descifrado se descarta.
+    if !store.is_unlocked() {
+        return Err(AppError::Locked);
+    }
+    let p = prefs.get();
+    let tree = vaultdb::tree(&db, p.show_vault_icons);
+    session.set(id.clone(), db);
+    shell::protect_window(&app, p.hide_from_capture);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let _ = store.write(|d| {
+        if let Some(v) = d.vaults.iter_mut().find(|v| v.id == id) {
+            v.last_opened = Some(now);
+        }
+        Ok(())
+    });
+    Ok(tree)
+}
+
+#[tauri::command]
+pub fn close_vault(app: tauri::AppHandle) {
+    shell::close_vault(&app);
+}
+
+/// Todos los comandos que tocan el vault exigen la app desbloqueada, además de la sesión abierta.
+fn require_unlocked(store: &Store) -> Result<()> {
+    if store.is_unlocked() { Ok(()) } else { Err(AppError::Locked) }
+}
+
+/// Latido de actividad de la interfaz: evita el cierre por inactividad mientras se usa el vault.
+#[tauri::command]
+pub fn touch_vault(session: State<Session>, id: String) -> Result<()> {
+    session.with(&id, |_| Ok(()))
+}
+
+#[tauri::command]
+pub fn entry_detail(store: State<Store>, session: State<Session>, id: String, entry: String) -> Result<EntryDetail> {
+    require_unlocked(&store)?;
+    session.with(&id, |db| vaultdb::detail(db, &entry))
+}
+
+#[tauri::command]
+pub fn entry_totp(store: State<Store>, session: State<Session>, id: String, entry: String) -> Result<TotpView> {
+    require_unlocked(&store)?;
+    session.with(&id, |db| vaultdb::totp(db, &entry))
+}
+
+/// Mostrar un secreto en pantalla: solo la contraseña y los campos protegidos. Lo demás ya viaja en el detalle.
+#[tauri::command]
+pub fn reveal_secret(
+    store: State<Store>,
+    session: State<Session>,
+    id: String,
+    entry: String,
+    field: String,
+) -> Result<Zeroizing<String>> {
+    require_unlocked(&store)?;
+    if field != "password" && !field.starts_with("custom:") {
+        return Err(AppError::NotFound);
+    }
+    session.with(&id, |db| vaultdb::secret(db, &entry, &field))
+}
+
+/// Copia un campo al portapapeles desde Rust: el valor no pasa por la interfaz.
+#[tauri::command]
+pub fn copy_secret(
+    store: State<Store>,
+    session: State<Session>,
+    prefs: State<PrefsState>,
+    clipboard: State<Clipboard>,
+    id: String,
+    entry: String,
+    field: String,
+) -> Result<()> {
+    require_unlocked(&store)?;
+    let text = session.with(&id, |db| vaultdb::secret(db, &entry, &field))?;
+    let secs = prefs.get().clipboard_clear_secs;
+    clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))
+}
+
+/// Guarda un adjunto. El diálogo «Guardar como» lo abre Rust: la ruta nunca la decide la interfaz.
+#[tauri::command]
+pub async fn save_attachment(
+    app: tauri::AppHandle,
+    store: State<'_, Store>,
+    session: State<'_, Session>,
+    id: String,
+    entry: String,
+    name: String,
+) -> Result<bool> {
+    use tauri_plugin_dialog::DialogExt;
+    require_unlocked(&store)?;
+    let data = session.with(&id, |db| vaultdb::attachment(db, &entry, &name))?;
+    let suggested = attach::safe_file_name(&name);
+    blocking(move || {
+        let Some(target) = app.dialog().file().set_file_name(&suggested).blocking_save_file() else {
+            return Ok(false);
+        };
+        let path = target.into_path().map_err(|_| AppError::msg("io"))?;
+        attach::write_attachment(&path, &data)?;
+        Ok(true)
+    })
+    .await
+}
+
+/// Abre un enlace del vault en el navegador. Solo `http`, `https` y `mailto`.
+#[tauri::command]
+pub fn open_link(app: tauri::AppHandle, store: State<Store>, url: String) -> Result<()> {
+    use tauri_plugin_opener::OpenerExt;
+    require_unlocked(&store)?;
+    let url = attach::safe_link(&url).ok_or(AppError::msg("linkBlocked"))?;
+    app.opener().open_url(url, None::<&str>).map_err(|e| AppError::Invalid(e.to_string()))
 }
 
 #[cfg(test)]

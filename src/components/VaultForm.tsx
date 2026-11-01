@@ -23,6 +23,7 @@ export function VaultForm({ vault, onClose, onSaved, allTags }: Props) {
   const [password, setPassword] = useState("");
   const [clearPassword, setClearPassword] = useState(false);
   const [tags, setTags] = useState<string[]>(vault?.tags ?? []);
+  const [openExternal, setOpenExternal] = useState(vault?.openExternal ?? false);
   const tagDraft = useRef(""); // lo que haya a medias en el campo de etiquetas
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
@@ -48,7 +49,7 @@ export function VaultForm({ vault, onClose, onSaved, allTags }: Props) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const input = { client, path, keyfile: keyfile || null, password: password || null, clearPassword, tags: tagDraft.current.trim() ? [...tags, tagDraft.current] : tags };
+    const input = { client, path, keyfile: keyfile || null, password: password || null, clearPassword, openExternal, tags: tagDraft.current.trim() ? [...tags, tagDraft.current] : tags };
     setBusy(true);
     try {
       if (vault) await api.updateVault(vault.id, input);
@@ -149,6 +150,10 @@ export function VaultForm({ vault, onClose, onSaved, allTags }: Props) {
           {vault?.hasPassword && (
             <Check checked={clearPassword} onChange={setClearPassword}>{t("form.clearPw")}</Check>
           )}
+        </div>
+        <div className="field">
+          <Check checked={openExternal} onChange={setOpenExternal}>{t("form.openExternal")}</Check>
+          <div className="help">{t("form.openExternalHelp")}</div>
         </div>
         {!vault && <Note>{t("form.note")}</Note>}
         {error && <Alert kind="err">{error}</Alert>}

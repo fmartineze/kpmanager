@@ -366,6 +366,35 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 {t("settings.sortRecent")}
               </Check>
             </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.shortcuts")}</span>
+              {[
+                [t("settings.scList"), [
+                  ["Ctrl F", t("settings.scSearch")],
+                  ["↑ ↓", t("settings.scMove")],
+                  ["Enter", t("settings.scBrowse")],
+                  ["Shift Enter", t("settings.scKeepass")],
+                  ["Esc", t("settings.scClear")],
+                ]],
+                [t("settings.scVault"), [
+                  ["↑ ↓", t("settings.scMove")],
+                  ["Enter", t("settings.scOpenItem")],
+                  ["Esc", t("settings.scUp")],
+                ]],
+                [t("settings.scGlobal"), [[prefs?.shortcut ?? "—", prefs?.shortcut ? t("settings.scShow") : t("settings.shortcutOff")]]],
+              ].map(([title, rows]) => (
+                <div key={title as string} className="sc-group">
+                  <span className="sc-title">{title as string}</span>
+                  {(rows as string[][]).map(([keys, what]) => (
+                    <div key={keys + what} className="sc-row">
+                      <span className="sc-keys">{keys.split(/[ +]/).map((k, i) => <kbd key={i}>{k}</kbd>)}</span>
+                      <span>{what}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </>
         )}
 
@@ -409,6 +438,46 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 {t("settings.lockHide")}
               </Check>
               <div className="help">{t("settings.autoLockHelp")}</div>
+            </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.vaultSection")}</span>
+              <div className="field">
+                <label className="label">{t("settings.clipboardClear")}</label>
+                <Segmented
+                  label={t("settings.clipboardClear")}
+                  value={String(prefs?.clipboardClearSecs ?? 15)}
+                  options={[
+                    { value: "10", label: t("settings.secondsShort", { n: 10 }) },
+                    { value: "15", label: t("settings.secondsShort", { n: 15 }) },
+                    { value: "30", label: t("settings.secondsShort", { n: 30 }) },
+                    { value: "60", label: t("settings.secondsShort", { n: 60 }) },
+                    { value: "0", label: t("settings.never") },
+                  ]}
+                  onChange={(v) => changePrefs({ clipboardClearSecs: Number(v) })}
+                />
+                <div className="help">{t("settings.clipboardClearHelp")}</div>
+              </div>
+              <div className="field">
+                <label className="label">{t("settings.vaultIdle")}</label>
+                <Segmented
+                  label={t("settings.vaultIdle")}
+                  value={String(prefs?.vaultIdleMinutes ?? 5)}
+                  options={[
+                    { value: "1", label: t("settings.minutesShort", { n: 1 }) },
+                    { value: "5", label: t("settings.minutesShort", { n: 5 }) },
+                    { value: "15", label: t("settings.minutesShort", { n: 15 }) },
+                    { value: "0", label: t("settings.never") },
+                  ]}
+                  onChange={(v) => changePrefs({ vaultIdleMinutes: Number(v) })}
+                />
+              </div>
+              <Check checked={!!prefs?.hideFromCapture} onChange={(v) => changePrefs({ hideFromCapture: v })}>
+                {t("settings.hideCapture")}
+              </Check>
+              <Check checked={!!prefs?.showVaultIcons} onChange={(v) => changePrefs({ showVaultIcons: v })}>
+                {t("settings.vaultIcons")}
+              </Check>
             </div>
 
             {hello?.supported && (

@@ -32,6 +32,14 @@ pub struct Prefs {
     pub check_updates: bool,
     /// Versión que el usuario eligió ignorar: no se vuelve a avisar de esa, sí de una posterior.
     pub ignored_update: Option<String>,
+    /// Segundos hasta vaciar el portapapeles tras copiar un secreto (0 = no vaciarlo).
+    pub clipboard_clear_secs: u32,
+    /// Minutos sin actividad hasta cerrar el vault que se está navegando (0 = nunca).
+    pub vault_idle_minutes: u32,
+    /// Mientras se navega un vault, la ventana no sale en capturas ni al compartir pantalla.
+    pub hide_from_capture: bool,
+    /// Mostrar los iconos de grupos y entradas del vault.
+    pub show_vault_icons: bool,
 }
 
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
@@ -49,6 +57,10 @@ impl Default for Prefs {
             language: "auto".into(),
             check_updates: true,
             ignored_update: None,
+            clipboard_clear_secs: 15,
+            vault_idle_minutes: 5,
+            hide_from_capture: true,
+            show_vault_icons: true,
         }
     }
 }

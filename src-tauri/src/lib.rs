@@ -1,4 +1,6 @@
+mod attach;
 mod backup;
+mod clipboard;
 mod commands;
 mod crypto;
 mod error;
@@ -9,9 +11,10 @@ mod prefs;
 mod scan;
 mod shell;
 mod store;
+mod vaultdb;
 
 use directories::ProjectDirs;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -38,10 +41,13 @@ pub fn run() {
                 .unwrap_or(app.path().app_config_dir()?);
             app.manage(store::Store::new(dir.join("vaults.enc")));
             app.manage(hello::Hello::new(dir.join("hello.bin")));
+            app.manage(vaultdb::Session::default());
+            app.manage(clipboard::Clipboard::default());
             let prefs = prefs::PrefsState::load(dir.join("prefs.json"));
             let shortcut = prefs.get().shortcut;
             app.manage(prefs);
             shell::setup_tray(app.handle())?;
+            spawn_idle_watcher(app.handle().clone());
             // La ventana se crea oculta (tauri.conf) y solo se muestra si no es un arranque con el sistema.
             let minimized = std::env::args().any(|a| a == "--minimized");
             if !minimized {
@@ -96,7 +102,34 @@ pub fn run() {
             commands::set_autostart,
             commands::set_shortcut,
             commands::shortcut_status,
+            commands::open_tree,
+            commands::close_vault,
+            commands::touch_vault,
+            commands::entry_detail,
+            commands::entry_totp,
+            commands::reveal_secret,
+            commands::copy_secret,
+            commands::save_attachment,
+            commands::open_link,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Al salir no se deja un secreto copiado en el portapapeles.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<clipboard::Clipboard>().clear_if_ours();
+            }
+        });
+}
+
+/// Cierra el vault que se está navegando tras un rato sin actividad.
+fn spawn_idle_watcher(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        let minutes = app.state::<prefs::PrefsState>().get().vault_idle_minutes;
+        if minutes > 0 && app.state::<vaultdb::Session>().close_if_idle(std::time::Duration::from_secs(minutes as u64 * 60)) {
+            shell::protect_window(&app, false);
+            let _ = app.emit("vault-closed", ());
+        }
+    });
 }

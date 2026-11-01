@@ -11,6 +11,8 @@ export interface Vault {
   favorite: boolean;
   lastOpened: number | null;
   tags: string[];
+  /** Abrir siempre directamente en KeePassXC, sin la vista dentro de la app. */
+  openExternal: boolean;
 }
 
 export interface VaultInput {
@@ -20,6 +22,7 @@ export interface VaultInput {
   password: string | null;
   clearPassword: boolean;
   tags: string[];
+  openExternal: boolean;
 }
 
 export interface Candidate {
@@ -45,10 +48,71 @@ export interface Prefs {
   checkUpdates: boolean;
   /** Versión de la que el usuario pidió no volver a recibir avisos. */
   ignoredUpdate: string | null;
+  /** Segundos hasta vaciar el portapapeles tras copiar un secreto (0 = no vaciarlo). */
+  clipboardClearSecs: number;
+  /** Minutos sin actividad hasta cerrar el vault abierto (0 = nunca). */
+  vaultIdleMinutes: number;
+  hideFromCapture: boolean;
+  showVaultIcons: boolean;
 }
 
 /** Lo que se edita desde Ajustes (el atajo y la versión ignorada tienen sus propios comandos). */
 export type PrefsUpdate = Omit<Prefs, "shortcut" | "ignoredUpdate">;
+
+export type IconView = { kind: "std"; id: number } | { kind: "custom"; id: string };
+
+export interface GroupNode {
+  id: string;
+  parent: string | null;
+  name: string;
+  icon: IconView | null;
+}
+
+export interface EntryRow {
+  id: string;
+  group: string;
+  title: string;
+  username: string;
+  url: string;
+  icon: IconView | null;
+  tags: string[];
+  hasTotp: boolean;
+  hasAttachments: boolean;
+}
+
+/** El árbol del vault: nunca lleva contraseñas, notas ni semillas TOTP. */
+export interface VaultTree {
+  root: string;
+  groups: GroupNode[];
+  entries: EntryRow[];
+  /** Iconos personalizados ya validados, como `data:image/png;base64,…`. */
+  icons: Record<string, string>;
+}
+
+export interface FieldInfo {
+  name: string;
+  protected: boolean;
+  value: string | null;
+}
+
+export interface EntryDetail {
+  id: string;
+  title: string;
+  username: string;
+  url: string;
+  notes: string;
+  tags: string[];
+  hasPassword: boolean;
+  hasTotp: boolean;
+  fields: FieldInfo[];
+  attachments: { name: string; size: number }[];
+}
+
+export interface Totp {
+  code: string;
+  validFor: number;
+  period: number;
+}
 
 export type ImportMode = "merge" | "replace";
 
@@ -118,6 +182,18 @@ export const api = {
   /** Motivo por el que el atajo global no está activo (null = activo o sin atajo). */
   shortcutStatus: () => invoke<unknown | null>("shortcut_status"),
   openVault: (id: string) => invoke<void>("open_vault", { id }),
+  openTree: (id: string) => invoke<VaultTree>("open_tree", { id }),
+  closeVault: () => invoke<void>("close_vault"),
+  touchVault: (id: string) => invoke<void>("touch_vault", { id }),
+  entryDetail: (id: string, entry: string) => invoke<EntryDetail>("entry_detail", { id, entry }),
+  entryTotp: (id: string, entry: string) => invoke<Totp>("entry_totp", { id, entry }),
+  /** Mostrar en pantalla: solo `password` o `custom:<nombre>`. */
+  revealSecret: (id: string, entry: string, field: string) => invoke<string>("reveal_secret", { id, entry, field }),
+  /** Copia desde Rust: el valor no pasa por la interfaz. */
+  copySecret: (id: string, entry: string, field: string) => invoke<void>("copy_secret", { id, entry, field }),
+  /** Abre «Guardar como» en Rust; devuelve false si el usuario cancela. */
+  saveAttachment: (id: string, entry: string, name: string) => invoke<boolean>("save_attachment", { id, entry, name }),
+  openLink: (url: string) => invoke<void>("open_link", { url }),
   getSettings: () => invoke<Settings>("get_settings"),
   setKeepassxcPath: (path: string | null) => invoke<Settings>("set_keepassxc_path", { path }),
   setDefaultKeyfile: (path: string | null) => invoke<Settings>("set_default_keyfile", { path }),

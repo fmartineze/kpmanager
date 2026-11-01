@@ -43,6 +43,9 @@ pub struct Vault {
     /// Segundos desde la época Unix de la última apertura desde la app.
     #[serde(default)]
     pub last_opened: Option<u64>,
+    /// Abrir siempre directamente en KeePassXC, sin la vista dentro de la app.
+    #[serde(default)]
+    pub open_external: bool,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
