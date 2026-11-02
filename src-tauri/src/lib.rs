@@ -48,6 +48,7 @@ pub fn run() {
             app.manage(store::Store::new(data_file));
             app.manage(hello::Hello::new(dir.join("hello.bin")));
             app.manage(vaultdb::Session::default());
+            app.manage(shell::CaptureProtection::default());
             app.manage(clipboard::Clipboard::default());
             let shortcut = prefs.get().shortcut;
             app.manage(prefs);

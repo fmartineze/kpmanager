@@ -43,11 +43,48 @@ pub fn close_vault(app: &AppHandle) {
     protect_window(app, false);
 }
 
-/// Excluye la ventana de capturas de pantalla y de compartir pantalla.
+/// Si la ventana está ahora mismo excluida de capturas. Cada bloqueo pide «desproteger»; sin este estado
+/// se llamaba a Windows (`SetWindowDisplayAffinity`) en cada bloqueo aunque no hubiera nada que cambiar, y eso
+/// dejaba la ventana en blanco tras el bloqueo automático por inactividad.
+#[derive(Default)]
+pub struct CaptureProtection(std::sync::atomic::AtomicBool);
+
+/// Excluye la ventana de capturas de pantalla y de compartir pantalla. Solo toca Windows si el estado cambia.
 pub fn protect_window(app: &AppHandle, on: bool) {
+    use std::sync::atomic::Ordering;
+    if app.state::<CaptureProtection>().0.swap(on, Ordering::SeqCst) == on {
+        return;
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_content_protected(on);
+        repaint(&w);
     }
+}
+
+/// Fuerza un repintado completo de la ventana (cambiar la afinidad de captura puede dejarla sin pintar).
+fn repaint(w: &tauri::WebviewWindow) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+        };
+        if let Ok(hwnd) = w.hwnd() {
+            unsafe {
+                let _ = SetWindowPos(
+                    HWND(hwnd.0 as _),
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                );
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = w;
 }
 
 /// Textos del menú de la bandeja: (abrir, bloquear, cerrar). Cualquier idioma desconocido usa inglés.
