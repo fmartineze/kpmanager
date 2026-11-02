@@ -18,7 +18,8 @@
         "minWidth": 340,
         "minHeight": 440,
         "decorations": false,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows"
       }
     ],
     "security": {
