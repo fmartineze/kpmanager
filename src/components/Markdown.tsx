@@ -11,6 +11,19 @@ md.use({
     html: ({ text }) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
     image: ({ text }) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;"),
     // Casillas de tareas como símbolo, sin controles de formulario.
+    // Tabla dentro de un contenedor con desplazamiento: así conserva el diseño de tabla real.
+    table(token) {
+      const head = this.parser.renderer.tablerow({
+        text: token.header.map((c) => this.parser.renderer.tablecell(c)).join(""),
+      });
+      const body = token.rows
+        .map((r) =>
+          this.parser.renderer.tablerow({ text: r.map((c) => this.parser.renderer.tablecell(c)).join("") }),
+        )
+        .join("");
+      return `<div class="md-table"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
+`;
+    },
     checkbox: ({ checked }) => (checked ? "☑ " : "☐ "),
   },
 });
@@ -18,6 +31,7 @@ md.use({
 const TAGS = [
   "p", "br", "hr", "strong", "em", "del", "code", "pre", "blockquote", "ul", "ol", "li", "a",
   "h1", "h2", "h3", "h4", "h5", "h6", "table", "thead", "tbody", "tr", "th", "td",
+  "div",
 ];
 
 const purify = DOMPurify(window);
@@ -31,7 +45,7 @@ purify.addHook("afterSanitizeAttributes", (node) => {
 export function renderMarkdown(text: string): string {
   return purify.sanitize(md.parse(text) as string, {
     ALLOWED_TAGS: TAGS,
-    ALLOWED_ATTR: ["href", "rel", "target", "start"],
+    ALLOWED_ATTR: ["href", "rel", "target", "start", "align", "class"],
     ALLOW_DATA_ATTR: false,
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
   });

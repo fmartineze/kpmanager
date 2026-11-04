@@ -512,6 +512,7 @@ export default function App() {
         cursor={navigated || q ? cursorIdx : -1}
         onToggleFavorite={toggleFavorite}
         onOpen={browseVault}
+        onOpenKeepass={open}
         onEdit={(v) => setDialog({ kind: "form", vault: v })}
         onAdd={() => setDialog({ kind: "form", vault: null })}
         onFolders={() => setDialog({ kind: "watch" })}

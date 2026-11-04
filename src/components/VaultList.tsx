@@ -16,6 +16,8 @@ interface Props {
   cursor: number;
   onToggleFavorite: (v: Vault) => void;
   onOpen: (v: Vault) => void;
+  /** Abre directamente en KeePassXC (Shift+Enter o Shift+clic). */
+  onOpenKeepass: (v: Vault) => void;
   onEdit: (v: Vault) => void;
   onAdd: () => void;
   onFolders: () => void;
@@ -26,7 +28,7 @@ const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 /** Mismo cliente, mismo color de avatar. */
 const hue = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6;
 
-export function VaultList({ vaults, total, query, tag, opening, cursor, onToggleFavorite, onOpen, onEdit, onAdd, onFolders }: Props) {
+export function VaultList({ vaults, total, query, tag, opening, cursor, onToggleFavorite, onOpen, onOpenKeepass, onEdit, onAdd, onFolders }: Props) {
   const t = useT();
 
   // Mantiene visible la fila resaltada al moverse con las flechas.
@@ -68,7 +70,7 @@ export function VaultList({ vaults, total, query, tag, opening, cursor, onToggle
             className={`row ${cls}`}
             style={{ animation: "kp-fade-up var(--kp-dur-base) var(--kp-ease-out) backwards", animationDelay: `${Math.min(i, 12) * 22}ms` }}
           >
-            <button className="row-main" onClick={() => onOpen(v)} disabled={!!opening} title={v.tags.length ? `${v.path}\n#${v.tags.join(" #")}` : v.path}>
+            <button className="row-main" onClick={(e) => (e.shiftKey ? onOpenKeepass(v) : onOpen(v))} disabled={!!opening} title={v.tags.length ? `${v.path}\n#${v.tags.join(" #")}` : v.path}>
               <span className={`avatar av-${hue(v.client)}`}>{phase === "done" ? <IconCheck className="s16" /> : initial(v.client)}</span>
               <span className="row-name">{v.client}</span>
               {v.tags.length > 0 && !phase && (
