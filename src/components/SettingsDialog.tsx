@@ -111,8 +111,23 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
   const changePrefs = (patch: Partial<PrefsUpdate>) =>
     run(async () => {
       if (!prefs) return;
-      const { shortcut: _s, ignoredUpdate: _i, ...current } = prefs;
+      const { shortcut: _s, ignoredUpdate: _i, puttyPath: _p, ...current } = prefs;
       const next = await api.setPrefs({ ...current, ...patch });
+      setPrefs(next);
+      onPrefs(next);
+    });
+
+  const pickPutty = () =>
+    run(async () => {
+      const next = await api.pickPutty();
+      if (!next) return;
+      setPrefs(next);
+      onPrefs(next);
+    });
+
+  const clearPutty = () =>
+    run(async () => {
+      const next = await api.clearPutty();
       setPrefs(next);
       onPrefs(next);
     });
@@ -336,7 +351,27 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
             </div>
 
             <div className="section">
-              <span className="section-title">{t("settings.quick")}</span>
+              <span className="section-title">{t("settings.window")}</span>
+              {autostart !== null && (
+                <>
+                  <Check checked={autostart} onChange={toggleAutostart}>{t("settings.autostart")}</Check>
+                  <div className="help">{t("settings.autostartHelp")}</div>
+                </>
+              )}
+              <Check checked={!!prefs?.minimizeToTray} onChange={(v) => changePrefs({ minimizeToTray: v })}>
+                {t("settings.minTray")}
+              </Check>
+              <Check checked={!!prefs?.closeToTray} onChange={(v) => changePrefs({ closeToTray: v })}>
+                {t("settings.closeTray")}
+              </Check>
+              {prefs?.closeToTray && <div className="help">{t("settings.trayHelp")}</div>}
+              <Check checked={!prefs?.sortByName} onChange={(v) => changePrefs({ sortByName: !v })}>
+                {t("settings.sortRecent")}
+              </Check>
+            </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.shortcuts")}</span>
               <div className="field">
                 <label className="label" htmlFor="s-sc">{t("settings.shortcut")}</label>
                 <div className="input capture">
@@ -357,32 +392,6 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(DEFAULT_SHORTCUT)}>{t("settings.reset")}</button>
                 {prefs?.shortcut && <button className="btn btn-ghost btn-sm" onClick={() => saveShortcut(null)}>{t("common.remove")}</button>}
               </div>
-            </div>
-
-            {autostart !== null && (
-              <div className="section">
-                <span className="section-title">{t("settings.startup")}</span>
-                <Check checked={autostart} onChange={toggleAutostart}>{t("settings.autostart")}</Check>
-                <div className="help">{t("settings.autostartHelp")}</div>
-              </div>
-            )}
-
-            <div className="section">
-              <span className="section-title">{t("settings.window")}</span>
-              <Check checked={!!prefs?.minimizeToTray} onChange={(v) => changePrefs({ minimizeToTray: v })}>
-                {t("settings.minTray")}
-              </Check>
-              <Check checked={!!prefs?.closeToTray} onChange={(v) => changePrefs({ closeToTray: v })}>
-                {t("settings.closeTray")}
-              </Check>
-              {prefs?.closeToTray && <div className="help">{t("settings.trayHelp")}</div>}
-              <Check checked={!prefs?.sortByName} onChange={(v) => changePrefs({ sortByName: !v })}>
-                {t("settings.sortRecent")}
-              </Check>
-            </div>
-
-            <div className="section">
-              <span className="section-title">{t("settings.shortcuts")}</span>
               {[
                 [t("settings.scList"), [
                   ["Ctrl F", t("settings.scSearch")],
@@ -394,7 +403,9 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 [t("settings.scVault"), [
                   ["↑ ↓", t("settings.scMove")],
                   ["Enter", t("settings.scOpenItem")],
-                  ["Esc", t("settings.scUp")],
+                  ["Shift Enter", t("settings.scKeepass")],
+                  ["Backspace", t("settings.scUp")],
+                  ["Esc", t("settings.scHome")],
                 ]],
                 [t("settings.scGlobal"), [[prefs?.shortcut ?? "—", prefs?.shortcut ? t("settings.scShow") : t("settings.shortcutOff")]]],
               ].map(([title, rows]) => (
@@ -441,6 +452,44 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 {keyfile && <button className="btn btn-ghost btn-sm" onClick={() => saveKeyfile("")}>{t("common.remove")}</button>}
               </div>
             </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.browse")}</span>
+              <Check checked={!!prefs?.showVaultIcons} onChange={(v) => changePrefs({ showVaultIcons: v })}>
+                {t("settings.vaultIcons")}
+              </Check>
+            </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.ssh")}</span>
+              <div className="field">
+                <label className="label">{t("settings.sshClient")}</label>
+                <Segmented
+                  label={t("settings.sshClient")}
+                  value={prefs?.sshClient ?? "console"}
+                  options={[
+                    { value: "console", label: t("settings.sshConsole") },
+                    { value: "putty", label: "PuTTY" },
+                  ]}
+                  onChange={(v) => changePrefs({ sshClient: v as "console" | "putty" })}
+                />
+                {prefs?.sshClient === "putty" && (
+                  <>
+                    <div className="input-row">
+                      <div className="input">
+                        <span className={`input-el ${prefs.puttyPath ? "" : "muted"}`} title={prefs.puttyPath ?? ""} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {prefs.puttyPath ?? t("settings.puttyNone")}
+                        </span>
+                      </div>
+                      <button className="btn btn-secondary" onClick={pickPutty}>{t("settings.puttyPick")}</button>
+                      {prefs.puttyPath && <button className="btn btn-ghost" onClick={clearPutty}>{t("settings.puttyClear")}</button>}
+                    </div>
+                    <div className="help">{t("settings.puttyHelp")}</div>
+                  </>
+                )}
+                {prefs?.sshClient !== "putty" && <div className="help">{t("settings.sshConsoleHelp")}</div>}
+              </div>
+            </div>
           </>
         )}
 
@@ -452,10 +501,24 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 {t("settings.lockHide")}
               </Check>
               <div className="help">{t("settings.autoLockHelp")}</div>
+              <div className="field">
+                <label className="label">{t("settings.vaultIdle")}</label>
+                <Segmented
+                  label={t("settings.vaultIdle")}
+                  value={String(prefs?.vaultIdleMinutes ?? 5)}
+                  options={[
+                    { value: "1", label: t("settings.minutesShort", { n: 1 }) },
+                    { value: "5", label: t("settings.minutesShort", { n: 5 }) },
+                    { value: "15", label: t("settings.minutesShort", { n: 15 }) },
+                    { value: "0", label: t("settings.never") },
+                  ]}
+                  onChange={(v) => changePrefs({ vaultIdleMinutes: Number(v) })}
+                />
+              </div>
             </div>
 
             <div className="section">
-              <span className="section-title">{t("settings.vaultSection")}</span>
+              <span className="section-title">{t("settings.clipboard")}</span>
               <div className="field">
                 <label className="label">{t("settings.clipboardClear")}</label>
                 <Segmented
@@ -472,25 +535,12 @@ export function SettingsDialog({ onClose, onPrefs, onReset, onImported }: Props)
                 />
                 <div className="help">{t("settings.clipboardClearHelp")}</div>
               </div>
-              <div className="field">
-                <label className="label">{t("settings.vaultIdle")}</label>
-                <Segmented
-                  label={t("settings.vaultIdle")}
-                  value={String(prefs?.vaultIdleMinutes ?? 5)}
-                  options={[
-                    { value: "1", label: t("settings.minutesShort", { n: 1 }) },
-                    { value: "5", label: t("settings.minutesShort", { n: 5 }) },
-                    { value: "15", label: t("settings.minutesShort", { n: 15 }) },
-                    { value: "0", label: t("settings.never") },
-                  ]}
-                  onChange={(v) => changePrefs({ vaultIdleMinutes: Number(v) })}
-                />
-              </div>
+            </div>
+
+            <div className="section">
+              <span className="section-title">{t("settings.privacy")}</span>
               <Check checked={!!prefs?.hideFromCapture} onChange={(v) => changePrefs({ hideFromCapture: v })}>
                 {t("settings.hideCapture")}
-              </Check>
-              <Check checked={!!prefs?.showVaultIcons} onChange={(v) => changePrefs({ showVaultIcons: v })}>
-                {t("settings.vaultIcons")}
               </Check>
             </div>
 

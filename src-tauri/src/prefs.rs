@@ -42,10 +42,15 @@ pub struct Prefs {
     pub show_vault_icons: bool,
     /// Fichero de datos cifrado elegido por el usuario; `None` = la ubicación predeterminada.
     pub data_file: Option<String>,
+    /// Cliente con el que se abren las conexiones SSH: `console` (ssh en una consola) | `putty`.
+    pub ssh_client: String,
+    /// Ruta de `putty.exe`. Solo la fija un comando de Rust tras elegirla en un cuadro nativo.
+    pub putty_path: Option<String>,
 }
 
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
 pub const LANGUAGES: [&str; 3] = ["auto", "es", "en"];
+pub const SSH_CLIENTS: [&str; 2] = ["console", "putty"];
 
 impl Default for Prefs {
     fn default() -> Self {
@@ -64,6 +69,8 @@ impl Default for Prefs {
             hide_from_capture: true,
             show_vault_icons: true,
             data_file: None,
+            ssh_client: "console".into(),
+            putty_path: None,
         }
     }
 }

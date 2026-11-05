@@ -13,6 +13,7 @@ const mk =
 
 export const IconSearch = mk(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>);
 export const IconPlus = mk(<path d="M12 5v14M5 12h14" />);
+export const IconExpand = mk(<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />);
 export const IconX = mk(<path d="M6 6l12 12M18 6 6 18" />);
 export const IconMinus = mk(<path d="M5 12h14" />);
 export const IconFolder = mk(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />);

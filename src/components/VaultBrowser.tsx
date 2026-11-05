@@ -2,9 +2,11 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { api, EntryDetail, EntryRow, errMsg, GroupNode, Prefs, Totp, Vault, VaultTree } from "../api";
 import { useT } from "../i18n";
 import {
-  IconAlert, IconBack, IconClock, IconCopy, IconDownload, IconExternal, IconEye, IconEyeOff, IconFolder, IconPaperclip, IconReport, IconSearch, IconX,
+  IconAlert, IconBack, IconClock, IconCopy, IconDownload, IconExpand, IconExternal, IconEye, IconEyeOff, IconFolder, IconHome, IconPaperclip, IconReport, IconSearch, IconTerminal, IconX,
 } from "./Icons";
 import { Markdown } from "./Markdown";
+import { Modal } from "./Modal";
+import { KeyHints, Note } from "./ui";
 import { ReportDialog } from "./ReportDialog";
 import { VaultIcon } from "./VaultIcon";
 
@@ -32,6 +34,7 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [link, setLink] = useState<string | null>(null);
+  const [ssh, setSsh] = useState<{ target: string; options: PassOption[]; stage: "ask" | "pick" } | null>(null); // SSH en curso
   const [showEmpty, setShowEmpty] = useState(false);
   // Informe para compartir: entradas candidatas (una sola = desde su ficha) y carpeta de la que salen.
   const [report, setReport] = useState<{ rows: EntryRow[]; where: string } | null>(null);
@@ -68,10 +71,16 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
     const q = norm(deferred.trim());
     const cmp = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
     if (q) {
-      return tree.entries
+      // La búsqueda cubre carpetas (por nombre) y entradas; las carpetas vacías solo si se muestran.
+      const groups = tree.groups
+        .filter((g) => g.id !== tree.root && norm(g.name).includes(q) && (showEmpty || filled.has(g.id)))
+        .sort((a, b) => cmp(a.name, b.name))
+        .map((g): Item => ({ kind: "group", g }));
+      const found = tree.entries
         .filter((e) => norm(e.title).includes(q) || norm(e.username).includes(q) || norm(e.url).includes(q) || e.tags.some((x) => norm(x).includes(q)))
         .sort((a, b) => cmp(a.title, b.title))
         .map((e): Item => ({ kind: "entry", e }));
+      return [...groups, ...found];
     }
     const groups = tree.groups.filter((g) => g.parent === here && (showEmpty || filled.has(g.id))).sort((a, b) => cmp(a.name, b.name));
     const entries = tree.entries.filter((e) => e.group === here).sort((a, b) => cmp(a.title, b.title));
@@ -100,20 +109,53 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
 
   const pick = (it: Item) => {
     if (it.kind === "group") {
-      setPath((p) => [...p, it.g.id]);
+      // Ruta completa desde la raíz: al venir de una búsqueda la carpeta puede estar en cualquier sitio.
+      const chain: string[] = [];
+      for (let g: GroupNode | undefined = it.g; g; g = g.parent ? byId.get(g.parent) : undefined) chain.unshift(g.id);
+      setPath(chain[0] === tree.root ? chain : [tree.root, ...chain]);
       setQuery("");
     } else setEntry(it.e);
   };
+
+  // Retroceso sube un nivel y Enter abre la fila resaltada, estén o no en el cuadro de búsqueda
+  // (con el foco en un botón, Enter ya lo pulsa él). Con un diálogo encima no se toca nada.
+  useEffect(() => {
+    if (entry || report || link) return;
+    const h = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      const tag = el.tagName;
+      if (e.key === "Backspace" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // Dentro de un campo de texto con contenido, Retroceso sigue borrando.
+        if ((tag === "INPUT" || tag === "TEXTAREA") && (el as HTMLInputElement).value) return;
+        e.preventDefault();
+        up();
+      } else if (e.key === "Escape" && tag !== "INPUT") {
+        escape();
+      } else if (e.key === "Enter" && tag !== "INPUT" && tag !== "BUTTON" && tag !== "A" && items[cur]) {
+        e.preventDefault();
+        if (e.shiftKey) onOpenKeepass();
+        else pick(items[cur]);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  });
+
+  // Esc: siempre vuelve a la lista de clientes (Inicio); Retroceso sube un nivel.
+  const escape = () => onBack();
 
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (items.length) setCursor((c) => (Math.min(c, items.length - 1) + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length);
     } else if (e.key === "Enter") {
-      if (items[cur]) pick(items[cur]);
+      // Sin esto, al abrir una entrada el foco salta a su botón «Atrás» y el propio Enter lo activa.
+      e.preventDefault();
+      if (e.shiftKey) onOpenKeepass();
+      else if (items[cur]) pick(items[cur]);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      if (!report) up();
+      if (!report) escape();
     }
   }
 
@@ -125,30 +167,39 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
 
   // Antes de abrir cualquier enlace se muestra la dirección real: el texto de un enlace puede engañar.
   const confirmLink = link && (
-    <div className="link-confirm" role="alertdialog" aria-label={t("vault.linkAsk")}>
-      <div className="alert alert-info">
-        <IconExternal className="s16" />
-        <div>
-          <div>{t("vault.linkAsk")}</div>
-          <div className="link-url">{link}</div>
-          <div className="btns">
-            <button
-              className="btn btn-primary btn-sm"
-              autoFocus
-              onClick={() => {
-                const url = link;
-                setLink(null);
-                api.openLink(url).catch((e) => notify(errMsg(e), "error"));
-              }}
-            >
-              {t("vault.linkOpen")}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setLink(null)}>{t("common.cancel")}</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <LinkConfirm
+      url={link}
+      onCancel={() => setLink(null)}
+      onOpen={() => {
+        const url = link;
+        setLink(null);
+        api.openLink(url).catch((e) => notify(errMsg(e), "error"));
+      }}
+    />
   );
+
+  // SSH en dos pasos: primero «¿abrir o cancelar?» y, si se acepta, qué campo se usa como contraseña.
+  const openSsh = (field: string | null) => {
+    if (!entry) return;
+    setSsh(null);
+    api
+      .openSsh(vault.id, entry.id, field)
+      .then(() => field && notify(t("vault.sshCopied", { s: prefs.clipboardClearSecs || 0 })))
+      .catch((e) => notify(errMsg(e), "error"));
+  };
+  const confirmSsh =
+    ssh &&
+    (ssh.stage === "ask" ? (
+      <LinkConfirm
+        url={`ssh ${ssh.target}`}
+        ask={t("vault.sshAsk")}
+        openLabel={t("vault.sshOpen")}
+        onCancel={() => setSsh(null)}
+        onOpen={() => setSsh({ ...ssh, stage: "pick" })}
+      />
+    ) : (
+      <SshPasswordDialog target={ssh.target} options={ssh.options} onCancel={() => setSsh(null)} onDone={openSsh} />
+    ));
 
   const emptyNote = (
     <div className="empty-note">
@@ -174,12 +225,16 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
           groupName={groupPath(entry.group)}
           custom={tree.icons}
           onBack={() => setEntry(null)}
+          onHome={onBack}
           onLink={setLink}
           notify={notify}
-          paused={!!report}
+          paused={!!report || !!link || !!ssh}
+          onOpenKeepass={onOpenKeepass}
+          onSsh={(target, options) => setSsh({ target, options, stage: "ask" })}
           onReport={() => setReport({ rows: [entry], where: groupPath(entry.group) })}
         />
         {confirmLink}
+        {confirmSsh}
         {reportDialog}
       </>
     );
@@ -191,6 +246,9 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
         <div className="vb-top">
           <button className="btn btn-icon" onClick={up} aria-label={t("vault.back")}>
             <IconBack /><span className="tip">{t("vault.back")}</span>
+          </button>
+          <button className="btn btn-icon" onClick={onBack} aria-label={t("vault.home")}>
+            <IconHome /><span className="tip">{t("vault.home")}</span>
           </button>
           <div className="vb-title">
             <span className="vb-name">{vault.client}</span>
@@ -232,11 +290,11 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
           {items.map((it, i) => {
             const isGroup = it.kind === "group";
             const title = (isGroup ? it.g.name : it.e.title) || t("vault.untitled");
-            const sub = isGroup ? "" : query ? [groupPath(it.e.group), it.e.username].filter(Boolean).join(" · ") : it.e.username;
+            const sub = isGroup ? (query && it.g.parent ? groupPath(it.g.parent) : "") : query ? [groupPath(it.e.group), it.e.username].filter(Boolean).join(" · ") : it.e.username;
             const icon = prefs.showVaultIcons ? (isGroup ? it.g.icon : it.e.icon) : null;
             return (
               <div key={isGroup ? it.g.id : it.e.id} data-idx={i} className={`row ${i === cur ? "is-focus" : ""}`}>
-                <button className="row-main" onClick={() => pick(it)} title={[title, sub, !isGroup && it.e.tags.length ? `#${it.e.tags.join(" #")}` : ""].filter(Boolean).join("\n")}>
+                <button className="row-main" onClick={(e) => (e.shiftKey ? onOpenKeepass() : pick(it))} title={[title, sub, !isGroup && it.e.tags.length ? `#${it.e.tags.join(" #")}` : ""].filter(Boolean).join("\n")}>
                   <span className={`vicon ${isGroup ? "group" : ""}`}><VaultIcon icon={icon} kind={isGroup ? "group" : "entry"} custom={tree.icons} /></span>
                   <span className="row-text">
                     <span className="row-name">{title}</span>
@@ -258,9 +316,176 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
           {hiddenEmpty > 0 && emptyNote}
         </div>
       )}
+      {items.length > 0 && !link && !report && (
+        <KeyHints
+          items={[
+            ...(path.length > 1 ? ([["Backspace", t("hint.up")]] as [string, string][]) : []),
+            ["Shift+Enter", t("hint.keepass")],
+          ]}
+        />
+      )}
       {confirmLink}
       {reportDialog}
     </>
+  );
+}
+
+/** Segundo paso de SSH: qué campo se copia al portapapeles para usarlo como contraseña. */
+function SshPasswordDialog({
+  target, options, onCancel, onDone,
+}: {
+  target: string;
+  options: PassOption[];
+  onCancel: () => void;
+  onDone: (field: string | null) => void;
+}) {
+  const t = useT();
+  const [picked, setPicked] = useState<string | null>(options[0].value);
+  return (
+    <Modal
+      title={t("vault.sshPass")}
+      subtitle={`ssh ${target}`}
+      icon={<IconTerminal className="s16" />}
+      onClose={onCancel}
+      footer={
+        <>
+          <span className="grow" />
+          <button className="btn btn-ghost" onClick={onCancel}>{t("common.cancel")}</button>
+          <button className="btn btn-primary" onClick={() => onDone(picked)}>{t("vault.sshGo")}</button>
+        </>
+      }
+    >
+      <fieldset
+        className="choice"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            onDone(picked);
+          }
+        }}
+      >
+        <legend>{t("vault.sshPassQ")}</legend>
+        <div className="choice-list">
+        {options.map((o, i) => (
+          <label key={o.value ?? "none"} className={`choice-card compact ${picked === o.value ? "on" : ""}`} title={`${o.label} · ${o.hint}`}>
+            <input type="radio" className="sr" name="sshpass" autoFocus={picked === o.value || (i === 0 && !options.some((x) => x.value === picked))} checked={picked === o.value} onChange={() => setPicked(o.value)} />
+            <span className="radio" />
+            <span className="txt">
+              <strong>{o.label}</strong>
+              <small>{o.hint}</small>
+            </span>
+          </label>
+        ))}
+        </div>
+      </fieldset>
+      <Note>{t("vault.sshPassNote")}</Note>
+    </Modal>
+  );
+}
+
+/** Notas a pantalla completa, con el mismo renderizado (Markdown saneado o texto) que en la ficha. Esc la cierra. */
+function NotesFull({
+  text, mode, setMode, paused, onLink, onCopy, onClose,
+}: {
+  text: string;
+  mode: "md" | "text";
+  setMode: (m: "md" | "text") => void;
+  /** Con la confirmación de un enlace encima, Esc es de ella y no cierra esta vista. */
+  paused: boolean;
+  onLink: (href: string) => void;
+  onCopy: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bodyRef.current?.focus(); // con el foco aquí, ↑ ↓ RePág AvPág desplazan el texto
+  }, []);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.key !== "Escape" && e.key !== "Backspace") || paused) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, [paused, onClose]);
+
+  return (
+    <div className="notes-full" role="dialog" aria-label={t("vault.notes")}>
+      <div className="notes-full-head">
+        <span className="fld-label">{t("vault.notes")}</span>
+        <span className="grow" />
+        <div className="seg seg-sm" role="radiogroup" aria-label={t("vault.notes")}>
+          <button type="button" role="radio" aria-checked={mode === "md"} className={`seg-btn ${mode === "md" ? "on" : ""}`} onClick={() => setMode("md")}>Markdown</button>
+          <button type="button" role="radio" aria-checked={mode === "text"} className={`seg-btn ${mode === "text" ? "on" : ""}`} onClick={() => setMode("text")}>{t("vault.plain")}</button>
+        </div>
+        <button className="btn btn-icon plain" onClick={onCopy} aria-label={t("vault.copy")} title={t("vault.copy")}><IconCopy className="s16" /></button>
+        <button className="btn btn-icon plain" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}><IconX className="s16" /></button>
+      </div>
+      <div className="notes-full-body" ref={bodyRef} tabIndex={0}>
+        {mode === "md" ? <Markdown text={text} onLink={onLink} /> : <pre className="notes-plain">{text}</pre>}
+      </div>
+      <div className="kbd-hint"><span><kbd>Esc</kbd> / <kbd>Backspace</kbd> {t("vault.hintClose")}</span></div>
+    </div>
+  );
+}
+
+/** Confirmación para abrir un enlace, manejable con el teclado: ← → ↑ ↓ alternan, Enter acepta, Esc cancela. */
+interface PassOption {
+  value: string | null; // `password`, `custom:<nombre>` o null (ninguna)
+  label: string;
+  hint: string;
+}
+
+function LinkConfirm({
+  url, ask, openLabel, onOpen, onCancel,
+}: {
+  url: string;
+  ask?: string;
+  openLabel?: string;
+  onOpen: () => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const openRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onCancel();
+      } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        (document.activeElement === openRef.current ? cancelRef : openRef).current?.focus();
+      }
+    };
+    // En captura: se atiende antes que los atajos de la pantalla que hay debajo.
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, [onCancel]);
+
+  return (
+    <div className="link-confirm" role="alertdialog" aria-label={ask ?? t("vault.linkAsk")}>
+      <div className="alert alert-info">
+        <IconExternal className="s16" />
+        <div>
+          <div>{ask ?? t("vault.linkAsk")}</div>
+          <div className="link-url">{url}</div>
+          <div className="btns">
+            <button ref={openRef} className="btn btn-primary btn-sm" autoFocus onClick={onOpen}>{openLabel ?? t("vault.linkOpen")}</button>
+            <button ref={cancelRef} className="btn btn-ghost btn-sm" onClick={onCancel}>{t("common.cancel")}</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -273,11 +498,16 @@ interface EntryProps {
   groupName: string;
   custom: Record<string, string>;
   onBack: () => void;
+  onHome: () => void;
   onLink: (url: string) => void;
   notify: Notify;
   /** Con un diálogo encima, Esc cierra el diálogo y no debe volver atrás. */
   paused: boolean;
   onReport: () => void;
+  /** Pide confirmar una conexión SSH a este destino (`usuario@host`). */
+  onSsh: (target: string, options: PassOption[]) => void;
+  /** Shift+Enter: abre el vault en KeePassXC. */
+  onOpenKeepass: () => void;
 }
 
 const NOTES_KEY = "kp.notesMode";
@@ -291,7 +521,7 @@ const readMode = (): "md" | "text" => {
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
-function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notify, paused, onReport }: EntryProps) {
+function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLink, notify, paused, onReport, onSsh, onOpenKeepass }: EntryProps) {
   const t = useT();
   const [d, setD] = useState<EntryDetail | null>(null);
   const [error, setError] = useState("");
@@ -299,6 +529,10 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
   const [totp, setTotp] = useState<Totp | null>(null);
   const [left, setLeft] = useState(0);
   const [mode, setMode] = useState<"md" | "text">(readMode);
+  const [fi, setFi] = useState<string | null>(null); // campo resaltado con el teclado
+  const [expanded, setExpanded] = useState(false); // notas a pantalla completa
+  const halt = paused || expanded; // con algo encima, los atajos de la ficha no actúan
+  const [sshTarget, setSshTarget] = useState<string | null>(null); // destino SSH posible con usuario + URL
   const timers = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -313,10 +547,89 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
   }, [vault.id, row.id]);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && !paused && onBack();
+    const h = (e: KeyboardEvent) => {
+      if (halt) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (e.key === "Escape") onHome();
+      else if (e.key === "Backspace" && tag !== "INPUT" && tag !== "TEXTAREA") onBack();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onBack, paused]);
+  }, [onBack, onHome, halt]);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (halt || e.defaultPrevented || e.key !== "Enter" || !e.shiftKey) return;
+      e.preventDefault();
+      onOpenKeepass();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [halt, onOpenKeepass]);
+
+  // Campos navegables con ↑ ↓, en el orden en que se ven.
+  const order = useMemo(() => {
+    if (!d) return [] as string[];
+    const ids: string[] = [];
+    if (d.username) ids.push("username");
+    if (d.hasPassword) ids.push("password");
+    if (d.hasTotp && totp) ids.push("totp");
+    if (d.url) ids.push("url");
+    for (const f of d.fields) if (f.protected || f.value) ids.push(`custom:${f.name}`);
+    if (d.notes) ids.push("notes");
+    for (const a of d.attachments) ids.push(`att:${a.name}`);
+    return ids;
+  }, [d, totp]);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      // Un Enter ya atendido por un diálogo (que acaba de cerrarse) no debe actuar también sobre el campo.
+      if (halt || e.defaultPrevented || (e.key === "Enter" && e.shiftKey) || !order.length) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        // El foco estaba en el botón «Atrás»: sin soltarlo, Enter lo pulsaría y cerraría la entrada.
+        (document.activeElement as HTMLElement | null)?.blur();
+        const i = fi ? order.indexOf(fi) : -1;
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        const next = i < 0 ? (step > 0 ? 0 : order.length - 1) : Math.min(order.length - 1, Math.max(0, i + step));
+        setFi(order[next]);
+        document.querySelector(`[data-fid="${CSS.escape(order[next])}"]`)?.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter" && fi === "notes" && d?.notes) {
+        // preventDefault: el foco pasa a la vista ampliada y este Enter no debe pulsar nada allí.
+        e.preventDefault();
+        setExpanded(true);
+      } else if (e.key === "Enter" && fi === "url" && d?.url) {
+        // preventDefault: el foco salta al botón de la confirmación y este mismo Enter no debe aceptarla.
+        e.preventDefault();
+        onLink(d.url);
+      } else if ((e.key === "s" || e.key === "S") && fi === "url" && sshTarget && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        // Contraseña SSH a copiar: por defecto la de la entrada; también cualquier campo personalizado.
+        const options: PassOption[] = [
+          ...(d?.hasPassword ? [{ value: "password", label: t("vault.sshPassPassword"), hint: t("vault.sshPassPasswordHint") }] : []),
+          ...(d?.fields ?? []).filter((f) => f.protected || f.value).map((f) => ({ value: `custom:${f.name}`, label: f.name, hint: t("vault.sshPassCustomHint") })),
+          { value: null, label: t("vault.sshPassNone"), hint: t("vault.sshPassNoneHint") },
+        ];
+        onSsh(sshTarget, options);
+      } else if (e.key === "Tab") {
+        setFi(null); // pasa al teclado «normal»: Enter vuelve a pulsar el botón con el foco
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [order, fi, halt, d, onLink, onSsh, sshTarget, t]);
+
+  // Con la URL resaltada se consulta (en Rust) si usuario + URL dan un destino SSH válido.
+  useEffect(() => {
+    let alive = true;
+    setSshTarget(null);
+    if (fi === "url") api.sshTarget(vault.id, row.id).then((x) => alive && setSshTarget(x)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [fi, vault.id, row.id]);
+
+  const fcls = (id: string) => `fld ${fi === id ? "is-focus" : ""}`;
 
   // Código TOTP: se pide a Rust (la semilla no sale de allí) y se renueva al caducar.
   const loadTotp = useCallback(() => {
@@ -380,7 +693,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
   const secret = (label: string, field: string) => {
     const v = shown[field];
     return (
-      <div className="fld">
+      <div className={fcls(field)} data-fid={field}>
         <span className="fld-label">{label}</span>
         <div className="fld-row">
           <span className={`fld-val mono ${v === undefined ? "dots" : ""}`}>{v ?? "••••••••••"}</span>
@@ -394,7 +707,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
   };
 
   const text = (label: string, value: string, field: string, extra?: React.ReactNode, onClick?: () => void) => (
-    <div className="fld">
+    <div className={fcls(field)} data-fid={field}>
       <span className="fld-label">{label}</span>
       <div className="fld-row">
         {onClick ? (
@@ -417,6 +730,9 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
           <button className="btn btn-icon" onClick={onBack} aria-label={t("vault.back")} autoFocus>
             <IconBack /><span className="tip">{t("vault.back")}</span>
           </button>
+          <button className="btn btn-icon" onClick={onHome} aria-label={t("vault.home")}>
+            <IconHome /><span className="tip">{t("vault.home")}</span>
+          </button>
           <div className="vb-title">
             <span className="vb-name">{row.title || t("vault.untitled")}</span>
             <span className="crumbs"><span className="crumb on">{[vault.client, groupName].filter(Boolean).join(" › ")}</span></span>
@@ -436,7 +752,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
             {d.username && text(t("vault.username"), d.username, "username")}
             {d.hasPassword && secret(t("vault.password"), "password")}
             {d.hasTotp && totp && (
-              <div className="fld">
+              <div className={fcls("totp")} data-fid="totp">
                 <span className="fld-label">{t("vault.totp")}</span>
                 <div className="fld-row">
                   <span className="fld-val mono totp">{`${totp.code.slice(0, half)} ${totp.code.slice(half)}`}</span>
@@ -463,7 +779,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
               </div>
             )}
             {d.notes && (
-              <div className="fld">
+              <div className={fcls("notes")} data-fid="notes">
                 <div className="fld-head">
                   <span className="fld-label">{t("vault.notes")}</span>
                   <span className="grow" />
@@ -471,6 +787,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
                     <button type="button" role="radio" aria-checked={mode === "md"} className={`seg-btn ${mode === "md" ? "on" : ""}`} onClick={() => setNotesMode("md")}>Markdown</button>
                     <button type="button" role="radio" aria-checked={mode === "text"} className={`seg-btn ${mode === "text" ? "on" : ""}`} onClick={() => setNotesMode("text")}>{t("vault.plain")}</button>
                   </div>
+                  <button className="btn btn-icon plain" onClick={() => setExpanded(true)} aria-label={t("vault.notesExpand")} title={t("vault.notesExpand")}><IconExpand className="s16" /></button>
                   {copyBtn("notes")}
                 </div>
                 {mode === "md" ? <Markdown text={d.notes} onLink={onLink} /> : <pre className="notes-plain">{d.notes}</pre>}
@@ -480,7 +797,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
               <div className="fld">
                 <span className="fld-label">{t("vault.attachments")}</span>
                 {d.attachments.map((a) => (
-                  <div key={a.name} className="fld-row att">
+                  <div key={a.name} className={`fld-row att ${fi === `att:${a.name}` ? "is-focus" : ""}`} data-fid={`att:${a.name}`}>
                     <IconPaperclip className="s16 muted" />
                     <span className="fld-val">{a.name}</span>
                     <span className="att-size">{fmtSize(a.size)}</span>
@@ -493,6 +810,31 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onLink, notif
           </>
         )}
       </div>
+      {fi === "notes" && !halt && (
+        <div className="kbd-hint" aria-live="polite">
+          <span><kbd>Enter</kbd> {t("vault.hintExpand")}</span>
+        </div>
+      )}
+      {expanded && d?.notes && (
+        <NotesFull
+          text={d.notes}
+          mode={mode}
+          setMode={setNotesMode}
+          paused={paused}
+          onLink={onLink}
+          onCopy={() => copy("notes")}
+          onClose={() => setExpanded(false)}
+        />
+      )}
+      {!halt && fi !== "url" && fi !== "notes" && (
+        <KeyHints items={[["Backspace", t("hint.back")], ["Esc", t("hint.home")], ["Shift+Enter", t("hint.keepass")]]} />
+      )}
+      {fi === "url" && !halt && (
+        <div className="kbd-hint" aria-live="polite">
+          <span><kbd>Enter</kbd> {t("vault.hintOpenUrl")}</span>
+          {sshTarget && <span><kbd>S</kbd> {t("vault.hintOpenSsh")}</span>}
+        </div>
+      )}
     </>
   );
 }

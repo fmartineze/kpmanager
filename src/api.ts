@@ -54,10 +54,14 @@ export interface Prefs {
   vaultIdleMinutes: number;
   hideFromCapture: boolean;
   showVaultIcons: boolean;
+  /** Cliente de las conexiones SSH. */
+  sshClient: "console" | "putty";
+  /** Ruta de putty.exe; la fija Rust tras elegirla en un cuadro nativo. */
+  puttyPath: string | null;
 }
 
 /** Lo que se edita desde Ajustes (el atajo y la versión ignorada tienen sus propios comandos). */
-export type PrefsUpdate = Omit<Prefs, "shortcut" | "ignoredUpdate">;
+export type PrefsUpdate = Omit<Prefs, "shortcut" | "ignoredUpdate" | "puttyPath">;
 
 export type IconView = { kind: "std"; id: number } | { kind: "custom"; id: string };
 
@@ -190,6 +194,9 @@ export const api = {
   setFavorite: (id: string, favorite: boolean) => invoke<void>("set_favorite", { id, favorite }),
   getPrefs: () => invoke<Prefs>("get_prefs"),
   setPrefs: (update: PrefsUpdate) => invoke<Prefs>("set_prefs", { update }),
+  /** Abre el cuadro de Rust para elegir putty.exe; null si se cancela. */
+  pickPutty: () => invoke<Prefs | null>("pick_putty"),
+  clearPutty: () => invoke<Prefs>("clear_putty"),
   ignoreUpdate: (version: string | null) => invoke<Prefs>("ignore_update", { version }),
   setTrayLanguage: (language: Lang) => invoke<void>("set_tray_language", { language }),
   setShortcut: (shortcut: string | null) => invoke<Prefs>("set_shortcut", { shortcut }),
@@ -211,6 +218,9 @@ export const api = {
   copyReport: (id: string, entries: string[], includeCustom: boolean, includeNotes: boolean, lang: string) =>
     invoke<number>("copy_report", { id, entries, includeCustom, includeNotes, lang }),
   openLink: (url: string) => invoke<void>("open_link", { url }),
+  sshTarget: (id: string, entry: string) => invoke<string>("ssh_target", { id, entry }),
+  openSsh: (id: string, entry: string, passwordField: string | null) =>
+    invoke<void>("open_ssh", { id, entry, passwordField }),
   getSettings: () => invoke<Settings>("get_settings"),
   setKeepassxcPath: (path: string | null) => invoke<Settings>("set_keepassxc_path", { path }),
   setDefaultKeyfile: (path: string | null) => invoke<Settings>("set_default_keyfile", { path }),

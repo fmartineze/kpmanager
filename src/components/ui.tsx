@@ -38,6 +38,20 @@ export function Alert({ kind, children }: { kind: "ok" | "err" | "info"; childre
   );
 }
 
+/** Línea de acciones de teclado disponibles, al pie de la ventana. Cada par es [tecla(s), acción]. */
+export function KeyHints({ items }: { items: [string, string][] }) {
+  if (!items.length) return null;
+  return (
+    <div className="kbd-hint" aria-live="polite">
+      {items.map(([keys, what]) => (
+        <span key={keys + what}>
+          {keys.split("+").map((k) => <kbd key={k}>{k}</kbd>)} {what}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export const Note = ({ children }: { children: ReactNode }) => (
   <div className="note">
     <IconInfo className="s16" />

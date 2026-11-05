@@ -440,6 +440,7 @@ pub struct PrefsUpdate {
     vault_idle_minutes: u32,
     hide_from_capture: bool,
     show_vault_icons: bool,
+    ssh_client: String,
 }
 
 #[tauri::command]
@@ -447,7 +448,9 @@ pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs>
     // Un valor desconocido (fichero editado a mano, versión futura) vuelve al predeterminado.
     let theme = if THEMES.contains(&update.theme.as_str()) { update.theme } else { "system".into() };
     let language = if LANGUAGES.contains(&update.language.as_str()) { update.language } else { "auto".into() };
+    let ssh_client = if crate::prefs::SSH_CLIENTS.contains(&update.ssh_client.as_str()) { update.ssh_client } else { "console".into() };
     prefs.update(|p| {
+        p.ssh_client = ssh_client;
         p.minimize_to_tray = update.minimize_to_tray;
         p.close_to_tray = update.close_to_tray;
         p.lock_on_hide = update.lock_on_hide;
@@ -460,6 +463,33 @@ pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs>
         p.hide_from_capture = update.hide_from_capture;
         p.show_vault_icons = update.show_vault_icons;
     })
+}
+
+/// Solo se acepta un fichero llamado `putty.exe` que exista.
+fn is_putty(path: &std::path::Path) -> bool {
+    path.is_file() && path.file_name().is_some_and(|n| n.eq_ignore_ascii_case("putty.exe"))
+}
+
+/// Elige `putty.exe` en un cuadro nativo abierto desde Rust: la ruta de un programa que luego se ejecuta
+/// nunca la decide la interfaz. `None` si se cancela.
+#[tauri::command]
+pub async fn pick_putty(app: tauri::AppHandle, prefs: State<'_, PrefsState>) -> Result<Option<Prefs>> {
+    use tauri_plugin_dialog::DialogExt;
+    let picker = app.clone();
+    let file = blocking(move || {
+        Ok(picker.dialog().file().add_filter("PuTTY", &["exe"]).blocking_pick_file().and_then(|p| p.into_path().ok()))
+    })
+    .await?;
+    let Some(file) = file else { return Ok(None) };
+    if !is_putty(&file) {
+        return Err(AppError::msg("puttyInvalid"));
+    }
+    prefs.update(|p| p.putty_path = Some(file.to_string_lossy().into_owned())).map(Some)
+}
+
+#[tauri::command]
+pub fn clear_putty(prefs: State<PrefsState>) -> Result<Prefs> {
+    prefs.update(|p| p.putty_path = None)
 }
 
 /// Recuerda que el usuario ignora esta versión (`None` o vacío = volver a avisar).
@@ -839,6 +869,83 @@ pub fn open_link(app: tauri::AppHandle, store: State<Store>, url: String) -> Res
     require_unlocked(&store)?;
     let url = attach::safe_link(&url).ok_or(AppError::msg("linkBlocked"))?;
     app.opener().open_url(url, None::<&str>).map_err(|e| AppError::Invalid(e.to_string()))
+}
+
+/// Destino SSH (`usuario@host`) de una entrada, calculado en Rust con los datos del vault: la interfaz
+/// solo lo muestra para confirmar.
+fn ssh_target_of(session: &Session, id: &str, entry: &str) -> Result<String> {
+    let (user, url) = session.with(id, |db| {
+        Ok((vaultdb::secret(db, entry, "username")?, vaultdb::secret(db, entry, "url")?))
+    })?;
+    attach::ssh_target(&user, &url).ok_or(AppError::msg("sshInvalid"))
+}
+
+#[tauri::command]
+pub fn ssh_target(store: State<Store>, session: State<Session>, id: String, entry: String) -> Result<String> {
+    require_unlocked(&store)?;
+    ssh_target_of(&session, &id, &entry)
+}
+
+/// Abre una consola con `ssh usuario@host`. El destino sale de los datos del vault, validados; se lanza
+/// sin pasar cadenas de la interfaz y, como los dos tramos solo llevan caracteres corrientes, nada que
+/// `cmd` pueda interpretar.
+#[tauri::command]
+pub fn open_ssh(
+    store: State<Store>,
+    session: State<Session>,
+    prefs: State<PrefsState>,
+    clipboard: State<Clipboard>,
+    id: String,
+    entry: String,
+    password_field: Option<String>,
+) -> Result<()> {
+    require_unlocked(&store)?;
+    let target = ssh_target_of(&session, &id, &entry)?;
+    // Contraseña SSH: el campo elegido se copia (desde Rust, con las protecciones del portapapeles y su
+    // borrado automático) para pegarlo en el aviso de `ssh`. Solo la contraseña o un campo personalizado.
+    let copy_ssh_password = || -> Result<()> {
+    if let Some(field) = password_field.clone() {
+        if field != "password" && !field.starts_with("custom:") {
+            return Err(AppError::NotFound);
+        }
+        let text = session.with(&id, |db| vaultdb::secret(db, &entry, &field))?;
+        let secs = prefs.get().clipboard_clear_secs;
+        clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))?;
+    }
+    Ok(())
+    };
+    let settings = prefs.get();
+    if settings.ssh_client == "putty" {
+        // PuTTY se lanza directamente (sin intérprete de órdenes): `putty.exe -ssh usuario@host`. El usuario
+        // empieza por letra, número o «_», así que nunca se toma por una opción.
+        let exe = settings.putty_path.map(PathBuf::from).filter(|p| is_putty(p)).ok_or(AppError::msg("puttyMissing"))?;
+        copy_ssh_password()?;
+        return std::process::Command::new(exe)
+            .args(["-ssh", &target])
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| AppError::msg("sshFailed"));
+    }
+    copy_ssh_password()?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        // `ssh` devuelve el código de salida de la sesión remota (cualquier valor al cerrar con normalidad)
+        // y 255 si falla la conexión o la autenticación. Solo en ese caso la ventana espera una tecla
+        // para poder leer el error; si no, se cierra al terminar la sesión.
+        std::process::Command::new("cmd")
+            .raw_arg(format!("/c ssh {target} & if errorlevel 255 pause"))
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| AppError::msg("sshFailed"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        Err(AppError::msg("sshFailed"))
+    }
 }
 
 #[cfg(test)]

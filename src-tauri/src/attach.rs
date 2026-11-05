@@ -74,6 +74,54 @@ pub fn safe_link(raw: &str) -> Option<String> {
     (before_colon.contains('.') || before_colon.eq_ignore_ascii_case("localhost")).then(|| format!("https://{s}"))
 }
 
+/// Destino SSH `usuario@host` a partir del usuario y la URL de una entrada (contenido no fiable).
+/// Del usuario solo se admiten caracteres corrientes de nombres de cuenta; de la URL se extrae el host
+/// (sin esquema, credenciales, puerto ni ruta). Nada que pueda interpretarse como opción de `ssh` o como
+/// metacarácter del intérprete de órdenes: ante la menor duda, `None`.
+pub fn ssh_target(user: &str, url: &str) -> Option<String> {
+    let user = user.trim();
+    let first = user.chars().next()?;
+    if user.len() > 64
+        || !(first.is_ascii_alphanumeric() || first == '_')
+        || !user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    {
+        return None;
+    }
+    // Hay quien escribe las direcciones con «\» en lugar de «//».
+    let url = url.trim().replace('\\', "/");
+    if url.is_empty() || url.len() > 2048 || url.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return None;
+    }
+    let rest = match url.find("://") {
+        Some(i) if url[..i].chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-')) => &url[i + 3..],
+        Some(_) => return None,
+        None => url.trim_start_matches("//"),
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or(""); // credenciales incrustadas: se ignoran
+    let host = if let Some(inner) = authority.strip_prefix('[') {
+        // IPv6 entre corchetes, con puerto opcional detrás.
+        let end = inner.find(']')?;
+        let h = &inner[..end];
+        if !h.contains(':') || !h.chars().all(|c| c.is_ascii_hexdigit() || matches!(c, ':' | '.')) {
+            return None;
+        }
+        h
+    } else {
+        let h = authority.split(':').next().unwrap_or("");
+        let ok = !h.is_empty()
+            && h.len() <= 253
+            && !h.starts_with(['-', '.'])
+            && !h.contains("..")
+            && h.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_'));
+        if !ok {
+            return None;
+        }
+        h
+    };
+    Some(format!("{user}@{host}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,6 +155,24 @@ mod tests {
             "http://a.com\r\nX: y",
         ] {
             assert!(safe_link(bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn ssh_target_takes_host_from_url() {
+        let ok = |u: &str, url: &str| ssh_target(u, url);
+        assert_eq!(ok("root", "https:\\\\192.168.0.11:66").as_deref(), Some("root@192.168.0.11"));
+        assert_eq!(ok("root", "https://192.168.0.11:66/ruta?x=1").as_deref(), Some("root@192.168.0.11"));
+        assert_eq!(ok("admin", "servidor.local").as_deref(), Some("admin@servidor.local"));
+        assert_eq!(ok("a.b-c_d", "ssh://u:p@host-1.example.com:22").as_deref(), Some("a.b-c_d@host-1.example.com"));
+        assert_eq!(ok("root", "https://[fe80::1]:8443/").as_deref(), Some("root@fe80::1"));
+        for (u, url) in [
+            ("", "https://h.com"), ("-oProxyCommand=calc", "h.com"), ("root", "-oProxyCommand=calc"), ("root", "https://-h.com"),
+            ("ro ot", "h.com"), ("root;calc", "h.com"), ("root", "https://h.com&calc"), ("root", "https://h|calc"),
+            ("root", "https://h.com%0acalc"), ("a@b", "h.com"), ("root", "https://"),
+            ("root", "https://[nope]/"), ("root\\x", "h.com"), ("root", "h$(calc).com"), ("root", "a..b"),
+        ] {
+            assert!(ssh_target(u, url).is_none(), "{u} / {url}");
         }
     }
 

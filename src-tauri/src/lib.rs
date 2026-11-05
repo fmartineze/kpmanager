@@ -121,6 +121,10 @@ pub fn run() {
             commands::copy_secret,
             commands::save_attachment,
             commands::open_link,
+            commands::ssh_target,
+            commands::open_ssh,
+            commands::pick_putty,
+            commands::clear_putty,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

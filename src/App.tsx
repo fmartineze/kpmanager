@@ -12,6 +12,7 @@ import { WatchDialog } from "./components/WatchDialog";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { OpenState, VaultList } from "./components/VaultList";
 import { VaultBrowser } from "./components/VaultBrowser";
+import { KeyHints } from "./components/ui";
 import { VaultForm } from "./components/VaultForm";
 import { ScanDialog } from "./components/ScanDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -62,7 +63,7 @@ export default function App() {
   const [hello, setHello] = useState<HelloStatus>({ supported: false, enabled: false });
   // Cuándo se pide Windows Hello solo: al arrancar sí; tras bloquear, solo al volver a la app (ver helloPolicy).
   const [helloMode, setHelloMode] = useState<HelloMode>("mount");
-  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto", checkUpdates: false, ignoredUpdate: null, clipboardClearSecs: 15, vaultIdleMinutes: 5, hideFromCapture: true, showVaultIcons: true });
+  const [prefs, setPrefs] = useState<Prefs>({ shortcut: null, minimizeToTray: false, closeToTray: true, lockOnHide: false, sortByName: false, theme: "system", language: "auto", checkUpdates: false, ignoredUpdate: null, clipboardClearSecs: 15, vaultIdleMinutes: 5, hideFromCapture: true, showVaultIcons: true, sshClient: "console", puttyPath: null });
   // Fila resaltada para abrir con Enter; solo se muestra al buscar o tras usar las flechas.
   const [cursor, setCursor] = useState(0);
   const [navigated, setNavigated] = useState(false);
@@ -517,6 +518,9 @@ export default function App() {
         onAdd={() => setDialog({ kind: "form", vault: null })}
         onFolders={() => setDialog({ kind: "watch" })}
       />
+      {filtered.length > 0 && !dialog && (
+        <KeyHints items={[["Shift+Enter", t("hint.keepass")]]} />
+      )}
 
       {dialog?.kind === "form" && <VaultForm vault={dialog.vault} onClose={() => setDialog(null)} onSaved={saved} allTags={allTags} />}
       {dialog?.kind === "scan" && (
