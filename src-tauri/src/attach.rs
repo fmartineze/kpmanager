@@ -74,17 +74,27 @@ pub fn safe_link(raw: &str) -> Option<String> {
     (before_colon.contains('.') || before_colon.eq_ignore_ascii_case("localhost")).then(|| format!("https://{s}"))
 }
 
-/// Destino SSH `usuario@host` a partir del usuario y la URL de una entrada (contenido no fiable).
-/// Del usuario solo se admiten caracteres corrientes de nombres de cuenta; de la URL se extrae el host
-/// (sin esquema, credenciales, puerto ni ruta). Nada que pueda interpretarse como opción de `ssh` o como
-/// metacarácter del intérprete de órdenes: ante la menor duda, `None`.
-pub fn ssh_target(user: &str, url: &str) -> Option<String> {
+/// Nombre de cuenta corriente: sin espacios ni símbolos que una orden pueda interpretar.
+fn plain_name(s: &str) -> bool {
+    let mut it = s.chars();
+    it.next().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+        && s.len() <= 64
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+}
+
+/// Usuario y host para una conexión remota a partir del usuario y la URL de una entrada (contenido no
+/// fiable). Del usuario solo se admiten caracteres corrientes de nombres de cuenta (con `allow_domain`,
+/// también `DOMINIO\usuario`); de la URL se extrae el host (sin esquema, credenciales, puerto ni ruta).
+/// Nada que pueda interpretarse como opción de `ssh`, metacarácter del intérprete o línea de un fichero
+/// `.rdp`: ante la menor duda, `None`.
+pub fn remote_parts(user: &str, url: &str, allow_domain: bool) -> Option<(String, String)> {
     let user = user.trim();
-    let first = user.chars().next()?;
-    if user.len() > 64
-        || !(first.is_ascii_alphanumeric() || first == '_')
-        || !user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
+    let user_ok = match user.split_once('\\') {
+        Some((d, u)) if allow_domain => plain_name(d) && plain_name(u),
+        Some(_) => false,
+        None => plain_name(user),
+    };
+    if !user_ok {
         return None;
     }
     // Hay quien escribe las direcciones con «\» en lugar de «//».
@@ -119,7 +129,23 @@ pub fn ssh_target(user: &str, url: &str) -> Option<String> {
         }
         h
     };
-    Some(format!("{user}@{host}"))
+    Some((user.to_owned(), host.to_owned()))
+}
+
+/// Puerto TCP de un campo personalizado: solo dígitos, de 1 a 65535.
+pub fn parse_port(raw: &str) -> Option<u16> {
+    let s = raw.trim();
+    (!s.is_empty() && s.len() <= 5 && s.chars().all(|c| c.is_ascii_digit())).then(|| s.parse::<u16>().ok()).flatten().filter(|p| *p > 0)
+}
+
+/// Destino SSH `usuario@host`.
+pub fn ssh_target(user: &str, url: &str) -> Option<String> {
+    remote_parts(user, url, false).map(|(u, h)| format!("{u}@{h}"))
+}
+
+/// Usuario (admite `DOMINIO\usuario`) y host para Escritorio remoto.
+pub fn rdp_parts(user: &str, url: &str) -> Option<(String, String)> {
+    remote_parts(user, url, true)
 }
 
 #[cfg(test)]
@@ -173,6 +199,29 @@ mod tests {
             ("root", "https://[nope]/"), ("root\\x", "h.com"), ("root", "h$(calc).com"), ("root", "a..b"),
         ] {
             assert!(ssh_target(u, url).is_none(), "{u} / {url}");
+        }
+    }
+
+    #[test]
+    fn rdp_parts_accept_domain_users_only_for_rdp() {
+        assert_eq!(rdp_parts("DOM\\jose", "https://10.0.0.5:3389").unwrap(), ("DOM\\jose".into(), "10.0.0.5".into()));
+        assert_eq!(rdp_parts("admin", "srv.local").unwrap(), ("admin".into(), "srv.local".into()));
+        assert!(ssh_target("DOM\\jose", "10.0.0.5").is_none());
+        for (u, url) in [
+            ("a\\b\\c", "h.com"), ("\\b", "h.com"), ("a\\", "h.com"), ("a\r\nfull address:s:x", "h.com"),
+            ("root", "h.com\r\nusername:s:x"), ("root", "-h.com"), ("ro ot", "h.com"),
+        ] {
+            assert!(rdp_parts(u, url).is_none(), "{u} / {url}");
+        }
+    }
+
+    #[test]
+    fn ports_are_validated() {
+        assert_eq!(parse_port("2222"), Some(2222));
+        assert_eq!(parse_port(" 3390 "), Some(3390));
+        assert_eq!(parse_port("65535"), Some(65535));
+        for bad in ["", "0", "65536", "-1", "22a", "22 -o x", "1e3", "٣٣", "123456", "+22"] {
+            assert_eq!(parse_port(bad), None, "{bad}");
         }
     }
 

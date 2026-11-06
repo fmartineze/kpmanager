@@ -36,6 +36,7 @@ If you work with many clients and keep each one's credentials in its own KeePass
 - 🔎 **Instant search** as you type, ignoring case and accents.
 - ⌨️ **Keyboard-first:** type, ↑↓ arrows and **Enter** to open.
 - 🗂️ **Browse the vault without opening KeePassXC:** groups, entries with their icons, search, copy username/password/TOTP code, notes in **Markdown** and **attachment** download. Read-only.
+- 🖥️ **SSH and Remote Desktop with one key** from an entry's address (console or PuTTY), with optional ports in custom fields.
 - 📤 **Report to share:** copies as text the credentials of one entry, or of the ones you pick in a folder, to paste into a secret-sharing tool with expiring links (Password Pusher and the like). With security warnings; it never reaches the Windows history and the clipboard clears itself.
 - ⭐ **Favorites and recents:** pin your most-used clients on top; the rest is sorted by last use (or alphabetically).
 - 📁 **Import whole folders:** the client takes the name of the folder that contains the `.kdbx`. No duplicates.
@@ -81,7 +82,13 @@ Linux and macOS are not available yet; the code is prepared for them and they wi
 
 Type part of the client's name and press **Enter** (or click its row): the vault opens **inside the app**, with its groups and entries. If the client has no saved password or keyfile, it opens in KeePassXC directly. With **Shift + Enter** (or the "Open in KeePassXC" button inside the vault) it always opens in KeePassXC, already unlocked.
 
-Inside the vault: `↑` `↓` and **Enter** to move and open, **Esc** to go up a level. From an entry (or from a folder, choosing which ones) you can generate a **report to share**: a warning reminds you to send it with an expiring-link secret tool, not by email or chat. On each entry you can **copy** the username, password, one-time code (TOTP) or notes, **show** the password for a few seconds, open the address (you see the real link first) and **save attachments**. Notes are read as **Markdown** (you can switch to plain text). It is read-only: to edit, open the vault in KeePassXC.
+Inside the vault: `↑` `↓` and **Enter** to move and open, **Backspace** to go up a level and **Esc** to return to the client list (there is also a home button). Search covers both folders and entries. From an entry (or from a folder, choosing which ones) you can generate a **report to share**: a warning reminds you to send it with an expiring-link secret tool, not by email or chat. On each entry you can **copy** the username, password, one-time code (TOTP) or notes, **show** the password for a few seconds, open the address (you see the real link first) and **save attachments**. Notes are read as **Markdown** (you can switch to plain text). It is read-only: to edit, open the vault in KeePassXC.
+
+**Inside an entry** the keyboard works too: `↑` `↓` move through the fields and a line at the bottom shows the available actions. With a field highlighted, **C** copies it and **V** shows or hides the password; **Enter** opens the notes expanded (Markdown or text) or, on the address, opens the link; **Shift + Enter** opens the vault in KeePassXC.
+
+#### Connecting by SSH or Remote Desktop
+
+With the **address** highlighted, **S** opens an **SSH** connection and **T** opens **Remote Desktop** (Terminal Server). The host comes from the address (`https://192.168.0.11:66` or `server.local`) and the user is the entry's; Remote Desktop accepts `DOMAIN\user`. The port is not taken from the address: if the entry has the custom fields **`SSH-PORT`** or **`RDP-PORT`** with a valid port (1 to 65535) it is used; otherwise the default. After confirming, you choose which field is used as the password (the entry's by default): it is copied to the clipboard —clearing itself— so you can paste it into the console, PuTTY or Remote Desktop; it never goes on the command line. The username and address come from the vault, so they are strictly validated (ordinary characters only). SSH can open in a **console** (Windows OpenSSH client) or with **PuTTY**, chosen in **Settings → Vaults → SSH**.
 
 | Shortcut | Action |
 | --- | --- |
@@ -89,7 +96,10 @@ Inside the vault: `↑` `↓` and **Enter** to move and open, **Esc** to go up a
 | `↑` `↓` | Move through the list |
 | `Enter` | Browse the highlighted vault |
 | `Shift + Enter` | Open the highlighted vault in KeePassXC |
-| `Esc` | Clear the search / go up a level inside a vault |
+| `Esc` | Clear the search / return to the client list from a vault |
+| `Backspace` | Go up a level inside a vault |
+| `C` · `V` | (On an entry) copy the highlighted field · show/hide the password |
+| `S` · `T` | (With the address highlighted) open SSH · open Remote Desktop |
 | `Ctrl + Alt + K` | Open KP Manager from anywhere *(configurable)* |
 
 ### Tags

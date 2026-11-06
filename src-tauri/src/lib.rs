@@ -123,6 +123,8 @@ pub fn run() {
             commands::open_link,
             commands::ssh_target,
             commands::open_ssh,
+            commands::rdp_target,
+            commands::open_rdp,
             commands::pick_putty,
             commands::clear_putty,
         ])

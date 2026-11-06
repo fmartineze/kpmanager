@@ -36,6 +36,7 @@ Si trabajas con muchos clientes y guardas las credenciales de cada uno en su pro
 - 🔎 **Búsqueda instantánea** mientras escribes, sin distinguir mayúsculas ni acentos.
 - ⌨️ **Todo con teclado:** escribe, flechas ↑↓ y **Enter** para abrir.
 - 🗂️ **Navega el vault sin abrir KeePassXC:** grupos, entradas con sus iconos, búsqueda, copiar usuario/contraseña/código TOTP, notas en **Markdown** y descarga de **adjuntos**. Solo lectura.
+- 🖥️ **SSH y Escritorio remoto con una tecla** desde la dirección de una entrada (consola o PuTTY), con puertos opcionales en campos personalizados.
 - 📤 **Informe para compartir:** copia en texto las credenciales de una entrada, o de las que elijas de una carpeta, para pegarlas en una herramienta de compartir secretos con enlaces que caducan (Password Pusher y similares). Con avisos de seguridad; sin pasar por el historial de Windows y con borrado automático del portapapeles.
 - ⭐ **Favoritos y recientes:** fija arriba los clientes que más usas; el resto se ordena por último uso (o alfabéticamente).
 - 📁 **Importar carpetas enteras:** el cliente toma el nombre de la carpeta que contiene el `.kdbx`. Sin duplicados.
@@ -81,7 +82,13 @@ Linux y macOS no están disponibles todavía; el código está preparado para el
 
 Escribe parte del nombre del cliente y pulsa **Enter** (o haz clic en su fila): el vault se abre **dentro de la app**, con sus grupos y entradas. Si el cliente no tiene contraseña ni keyfile guardadas, se abre directamente en KeePassXC. Con **Mayús + Enter** (o el botón «Abrir en KeePassXC» dentro del vault) se abre siempre en KeePassXC, ya desbloqueado.
 
-Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Esc** para subir un nivel. En cada entrada (o desde la carpeta, eligiendo cuáles) puedes generar un **informe para compartir**: aparece un aviso para que lo envíes con una herramienta de secretos con enlace que caduque y no por correo ni chat. En cada entrada puedes **copiar** el usuario, la contraseña, el código de un solo uso (TOTP) o las notas, **mostrar** la contraseña unos segundos, abrir la dirección (se te muestra el enlace real antes) y **guardar los adjuntos**. Las notas se leen como **Markdown** (puedes cambiar a texto plano). Es de solo lectura: para editar, abre el vault en KeePassXC.
+Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Retroceso** para subir un nivel y **Esc** para volver a la lista de clientes (también hay un botón de inicio). La búsqueda incluye carpetas y entradas. En cada entrada (o desde la carpeta, eligiendo cuáles) puedes generar un **informe para compartir**: aparece un aviso para que lo envíes con una herramienta de secretos con enlace que caduque y no por correo ni chat. En cada entrada puedes **copiar** el usuario, la contraseña, el código de un solo uso (TOTP) o las notas, **mostrar** la contraseña unos segundos, abrir la dirección (se te muestra el enlace real antes) y **guardar los adjuntos**. Las notas se leen como **Markdown** (puedes cambiar a texto plano). Es de solo lectura: para editar, abre el vault en KeePassXC.
+
+**Dentro de una entrada** también se maneja con el teclado: `↑` `↓` recorren los campos y una línea al pie muestra las acciones disponibles. Con un campo resaltado, **C** lo copia y **V** muestra u oculta la contraseña; **Enter** abre las notas ampliadas (Markdown o texto) o, sobre la dirección, abre el enlace; **Mayús + Enter** abre el vault en KeePassXC.
+
+#### Conectar por SSH o Escritorio remoto
+
+Con la **dirección** resaltada, la tecla **S** abre una conexión **SSH** y **T** abre **Escritorio remoto** (Terminal Server). El host sale de la dirección (sea `https://192.168.0.11:66` o `servidor.local`) y el usuario es el de la entrada; en Escritorio remoto admite `DOMINIO\usuario`. El puerto no se toma de la dirección: si la entrada tiene los campos personalizados **`SSH-PORT`** o **`RDP-PORT`** con un puerto válido (1 a 65535), se usa ese; si no, el predeterminado. Tras confirmar se elige qué campo se usa como contraseña (por defecto la de la entrada): se copia al portapapeles —con borrado automático— para pegarla en la consola, en PuTTY o en Escritorio remoto; nunca va en la línea de órdenes. Usuario y dirección vienen del vault, así que se validan de forma estricta (solo caracteres corrientes). SSH puede abrirse en una **consola** (cliente OpenSSH de Windows) o con **PuTTY**, a elegir en **Ajustes → Vaults → SSH**.
 
 | Atajo | Acción |
 | --- | --- |
@@ -89,7 +96,10 @@ Dentro del vault: `↑` `↓` y **Enter** para moverte y abrir, **Esc** para sub
 | `↑` `↓` | Moverse por la lista |
 | `Enter` | Navegar el vault resaltado |
 | `Mayús + Enter` | Abrir el vault resaltado en KeePassXC |
-| `Esc` | Limpiar la búsqueda / subir un nivel dentro de un vault |
+| `Esc` | Limpiar la búsqueda / volver a la lista de clientes desde un vault |
+| `Retroceso` | Subir un nivel dentro de un vault |
+| `C` · `V` | (En una entrada) copiar el campo resaltado · mostrar/ocultar la contraseña |
+| `S` · `T` | (Con la dirección resaltada) abrir SSH · abrir Escritorio remoto |
 | `Ctrl + Alt + K` | Abrir KP Manager desde cualquier sitio *(configurable)* |
 
 ### Etiquetas

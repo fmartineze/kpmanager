@@ -34,7 +34,7 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [link, setLink] = useState<string | null>(null);
-  const [ssh, setSsh] = useState<{ target: string; options: PassOption[]; stage: "ask" | "pick" } | null>(null); // SSH en curso
+  const [ssh, setSsh] = useState<{ kind: "ssh" | "rdp"; target: string; options: PassOption[]; stage: "ask" | "pick" } | null>(null); // SSH o Escritorio remoto en curso
   const [showEmpty, setShowEmpty] = useState(false);
   // Informe para compartir: entradas candidatas (una sola = desde su ficha) y carpeta de la que salen.
   const [report, setReport] = useState<{ rows: EntryRow[]; where: string } | null>(null);
@@ -178,27 +178,27 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
     />
   );
 
-  // SSH en dos pasos: primero «¿abrir o cancelar?» y, si se acepta, qué campo se usa como contraseña.
-  const openSsh = (field: string | null) => {
-    if (!entry) return;
+  // SSH / Escritorio remoto en dos pasos: primero «¿abrir o cancelar?» y, si se acepta, qué campo se usa como contraseña.
+  const openRemote = (field: string | null) => {
+    if (!entry || !ssh) return;
+    const kind = ssh.kind;
     setSsh(null);
-    api
-      .openSsh(vault.id, entry.id, field)
-      .then(() => field && notify(t("vault.sshCopied", { s: prefs.clipboardClearSecs || 0 })))
+    (kind === "rdp" ? api.openRdp(vault.id, entry.id, field) : api.openSsh(vault.id, entry.id, field))
+      .then(() => field && notify(t(kind === "rdp" ? "vault.rdpCopied" : "vault.sshCopied", { s: prefs.clipboardClearSecs || 0 })))
       .catch((e) => notify(errMsg(e), "error"));
   };
   const confirmSsh =
     ssh &&
     (ssh.stage === "ask" ? (
       <LinkConfirm
-        url={`ssh ${ssh.target}`}
-        ask={t("vault.sshAsk")}
-        openLabel={t("vault.sshOpen")}
+        url={`${ssh.kind === "rdp" ? "RDP" : "ssh"} ${ssh.target}`}
+        ask={t(ssh.kind === "rdp" ? "vault.rdpAsk" : "vault.sshAsk")}
+        openLabel={t(ssh.kind === "rdp" ? "vault.rdpOpen" : "vault.sshOpen")}
         onCancel={() => setSsh(null)}
         onOpen={() => setSsh({ ...ssh, stage: "pick" })}
       />
     ) : (
-      <SshPasswordDialog target={ssh.target} options={ssh.options} onCancel={() => setSsh(null)} onDone={openSsh} />
+      <SshPasswordDialog kind={ssh.kind} target={ssh.target} options={ssh.options} onCancel={() => setSsh(null)} onDone={openRemote} />
     ));
 
   const emptyNote = (
@@ -230,7 +230,7 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
           notify={notify}
           paused={!!report || !!link || !!ssh}
           onOpenKeepass={onOpenKeepass}
-          onSsh={(target, options) => setSsh({ target, options, stage: "ask" })}
+          onSsh={(kind, target, options) => setSsh({ kind, target, options, stage: "ask" })}
           onReport={() => setReport({ rows: [entry], where: groupPath(entry.group) })}
         />
         {confirmLink}
@@ -332,8 +332,9 @@ export function VaultBrowser({ vault, tree, prefs, onBack, onOpenKeepass, notify
 
 /** Segundo paso de SSH: qué campo se copia al portapapeles para usarlo como contraseña. */
 function SshPasswordDialog({
-  target, options, onCancel, onDone,
+  kind, target, options, onCancel, onDone,
 }: {
+  kind: "ssh" | "rdp";
   target: string;
   options: PassOption[];
   onCancel: () => void;
@@ -343,15 +344,15 @@ function SshPasswordDialog({
   const [picked, setPicked] = useState<string | null>(options[0].value);
   return (
     <Modal
-      title={t("vault.sshPass")}
-      subtitle={`ssh ${target}`}
+      title={t(kind === "rdp" ? "vault.rdpPass" : "vault.sshPass")}
+      subtitle={`${kind === "rdp" ? "RDP" : "ssh"} ${target}`}
       icon={<IconTerminal className="s16" />}
       onClose={onCancel}
       footer={
         <>
           <span className="grow" />
           <button className="btn btn-ghost" onClick={onCancel}>{t("common.cancel")}</button>
-          <button className="btn btn-primary" onClick={() => onDone(picked)}>{t("vault.sshGo")}</button>
+          <button className="btn btn-primary" onClick={() => onDone(picked)}>{t(kind === "rdp" ? "vault.rdpGo" : "vault.sshGo")}</button>
         </>
       }
     >
@@ -379,7 +380,7 @@ function SshPasswordDialog({
         ))}
         </div>
       </fieldset>
-      <Note>{t("vault.sshPassNote")}</Note>
+      <Note>{t(kind === "rdp" ? "vault.rdpPassNote" : "vault.sshPassNote")}</Note>
     </Modal>
   );
 }
@@ -505,7 +506,7 @@ interface EntryProps {
   paused: boolean;
   onReport: () => void;
   /** Pide confirmar una conexión SSH a este destino (`usuario@host`). */
-  onSsh: (target: string, options: PassOption[]) => void;
+  onSsh: (kind: "ssh" | "rdp", target: string, options: PassOption[]) => void;
   /** Shift+Enter: abre el vault en KeePassXC. */
   onOpenKeepass: () => void;
 }
@@ -533,7 +534,9 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
   const [expanded, setExpanded] = useState(false); // notas a pantalla completa
   const halt = paused || expanded; // con algo encima, los atajos de la ficha no actúan
   const [sshTarget, setSshTarget] = useState<string | null>(null); // destino SSH posible con usuario + URL
+  const [rdpTarget, setRdpTarget] = useState<string | null>(null); // destino de Escritorio remoto posible
   const timers = useRef<Record<string, number>>({});
+  const actions = useRef<{ copy: (f: string) => unknown; toggle: (f: string) => unknown }>({ copy: () => {}, toggle: () => {} });
 
   useEffect(() => {
     let alive = true;
@@ -581,6 +584,22 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
     return ids;
   }, [d, totp]);
 
+  // Campos que se pueden mostrar u ocultar: la contraseña y los campos personalizados protegidos.
+  const isSecretField = useCallback(
+    (id: string) => id === "password" || (id.startsWith("custom:") && !!d?.fields.some((f) => f.protected && `custom:${f.name}` === id)),
+    [d],
+  );
+
+  // Campos que se pueden usar como contraseña: la de la entrada y cualquier campo personalizado.
+  const passOptions = useCallback(
+    (): PassOption[] => [
+      ...(d?.hasPassword ? [{ value: "password", label: t("vault.sshPassPassword"), hint: t("vault.sshPassPasswordHint") }] : []),
+      ...(d?.fields ?? []).filter((f) => f.protected || f.value).map((f) => ({ value: `custom:${f.name}`, label: f.name, hint: t("vault.sshPassCustomHint") })),
+      { value: null, label: t("vault.sshPassNone"), hint: t("vault.sshPassNoneHint") },
+    ],
+    [d, t],
+  );
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       // Un Enter ya atendido por un diálogo (que acaba de cerrarse) no debe actuar también sobre el campo.
@@ -604,26 +623,33 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
         onLink(d.url);
       } else if ((e.key === "s" || e.key === "S") && fi === "url" && sshTarget && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        // Contraseña SSH a copiar: por defecto la de la entrada; también cualquier campo personalizado.
-        const options: PassOption[] = [
-          ...(d?.hasPassword ? [{ value: "password", label: t("vault.sshPassPassword"), hint: t("vault.sshPassPasswordHint") }] : []),
-          ...(d?.fields ?? []).filter((f) => f.protected || f.value).map((f) => ({ value: `custom:${f.name}`, label: f.name, hint: t("vault.sshPassCustomHint") })),
-          { value: null, label: t("vault.sshPassNone"), hint: t("vault.sshPassNoneHint") },
-        ];
-        onSsh(sshTarget, options);
+        onSsh("ssh", sshTarget, passOptions());
+      } else if ((e.key === "t" || e.key === "T") && fi === "url" && rdpTarget && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        onSsh("rdp", rdpTarget, passOptions());
+      } else if ((e.key === "c" || e.key === "C") && fi && !fi.startsWith("att:") && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        actions.current.copy(fi);
+      } else if ((e.key === "v" || e.key === "V") && fi && isSecretField(fi) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        actions.current.toggle(fi);
       } else if (e.key === "Tab") {
         setFi(null); // pasa al teclado «normal»: Enter vuelve a pulsar el botón con el foco
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [order, fi, halt, d, onLink, onSsh, sshTarget, t]);
+  }, [order, fi, halt, d, onLink, onSsh, sshTarget, rdpTarget, passOptions, isSecretField]);
 
   // Con la URL resaltada se consulta (en Rust) si usuario + URL dan un destino SSH válido.
   useEffect(() => {
     let alive = true;
     setSshTarget(null);
-    if (fi === "url") api.sshTarget(vault.id, row.id).then((x) => alive && setSshTarget(x)).catch(() => {});
+    setRdpTarget(null);
+    if (fi === "url") {
+      api.sshTarget(vault.id, row.id).then((x) => alive && setSshTarget(x)).catch(() => {});
+      api.rdpTarget(vault.id, row.id).then((x) => alive && setRdpTarget(x)).catch(() => {});
+    }
     return () => {
       alive = false;
     };
@@ -668,6 +694,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
       notify(errMsg(e), "error");
     }
   };
+  actions.current = { copy, toggle };
 
   const save = async (name: string) => {
     try {
@@ -813,6 +840,7 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
       {fi === "notes" && !halt && (
         <div className="kbd-hint" aria-live="polite">
           <span><kbd>Enter</kbd> {t("vault.hintExpand")}</span>
+          <span><kbd>C</kbd> {t("hint.copy")}</span>
         </div>
       )}
       {expanded && d?.notes && (
@@ -827,12 +855,19 @@ function EntryView({ vault, row, prefs, groupName, custom, onBack, onHome, onLin
         />
       )}
       {!halt && fi !== "url" && fi !== "notes" && (
-        <KeyHints items={[["Backspace", t("hint.back")], ["Esc", t("hint.home")], ["Shift+Enter", t("hint.keepass")]]} />
+        <KeyHints
+          items={
+            fi && !fi.startsWith("att:")
+              ? [["C", t("hint.copy")], ...(isSecretField(fi) ? ([["V", t(fi in shown ? "hint.hide" : "hint.reveal")]] as [string, string][]) : [])]
+              : [["Backspace", t("hint.back")], ["Esc", t("hint.home")], ["Shift+Enter", t("hint.keepass")]]
+          }
+        />
       )}
       {fi === "url" && !halt && (
         <div className="kbd-hint" aria-live="polite">
           <span><kbd>Enter</kbd> {t("vault.hintOpenUrl")}</span>
           {sshTarget && <span><kbd>S</kbd> {t("vault.hintOpenSsh")}</span>}
+          {rdpTarget && <span><kbd>T</kbd> {t("vault.hintOpenRdp")}</span>}
         </div>
       )}
     </>

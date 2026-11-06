@@ -469,6 +469,16 @@ pub fn detail(db: &Database, entry_id: &str) -> Result<EntryDetail> {
 
 /// Valor de un campo para copiar o revelar. `field`: `username`, `password`, `url`, `notes`, `totp`
 /// o `custom:<nombre>`.
+/// Valor de un campo personalizado por su nombre (sin distinguir mayúsculas), si existe y no está vacío.
+pub fn custom_text(db: &Database, entry_id: &str, name: &str) -> Result<Option<String>> {
+    let e = db.entry(parse_entry_id(entry_id)?).ok_or(AppError::NotFound)?;
+    Ok(e.fields
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.get().trim().to_owned())
+        .filter(|v| !v.is_empty()))
+}
+
 pub fn secret(db: &Database, entry_id: &str, field: &str) -> Result<Zeroizing<String>> {
     let e = db.entry(parse_entry_id(entry_id)?).ok_or(AppError::NotFound)?;
     let text = match field {

@@ -218,6 +218,9 @@ export const api = {
   copyReport: (id: string, entries: string[], includeCustom: boolean, includeNotes: boolean, lang: string) =>
     invoke<number>("copy_report", { id, entries, includeCustom, includeNotes, lang }),
   openLink: (url: string) => invoke<void>("open_link", { url }),
+  rdpTarget: (id: string, entry: string) => invoke<string>("rdp_target", { id, entry }),
+  openRdp: (id: string, entry: string, passwordField: string | null) =>
+    invoke<void>("open_rdp", { id, entry, passwordField }),
   sshTarget: (id: string, entry: string) => invoke<string>("ssh_target", { id, entry }),
   openSsh: (id: string, entry: string, passwordField: string | null) =>
     invoke<void>("open_ssh", { id, entry, passwordField }),

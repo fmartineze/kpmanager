@@ -871,19 +871,130 @@ pub fn open_link(app: tauri::AppHandle, store: State<Store>, url: String) -> Res
     app.opener().open_url(url, None::<&str>).map_err(|e| AppError::Invalid(e.to_string()))
 }
 
-/// Destino SSH (`usuario@host`) de una entrada, calculado en Rust con los datos del vault: la interfaz
-/// solo lo muestra para confirmar.
-fn ssh_target_of(session: &Session, id: &str, entry: &str) -> Result<String> {
+/// Copia al portapapeles el campo elegido como contraseña (solo `password` o un campo personalizado).
+fn copy_password_field(
+    session: &Session,
+    prefs: &PrefsState,
+    clipboard: &Clipboard,
+    id: &str,
+    entry: &str,
+    field: Option<&str>,
+) -> Result<()> {
+    let Some(field) = field else { return Ok(()) };
+    if field != "password" && !field.starts_with("custom:") {
+        return Err(AppError::NotFound);
+    }
+    let text = session.with(id, |db| vaultdb::secret(db, entry, field))?;
+    let secs = prefs.get().clipboard_clear_secs;
+    clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))
+}
+
+/// Puerto indicado en un campo personalizado (`SSH-PORT`, `RDP-PORT`). Si el campo falta o está vacío se usa el
+/// predeterminado; si tiene algo que no es un puerto válido se avisa en vez de conectar a otro sitio.
+fn port_field(session: &Session, id: &str, entry: &str, name: &str) -> Result<Option<u16>> {
+    match session.with(id, |db| vaultdb::custom_text(db, entry, name))? {
+        None => Ok(None),
+        Some(raw) => attach::parse_port(&raw).map(Some).ok_or(AppError::msg_arg("portInvalid", name)),
+    }
+}
+
+/// Usuario, host y puerto opcional de Escritorio remoto de una entrada, calculados en Rust con los datos del vault.
+fn rdp_parts_of(session: &Session, id: &str, entry: &str) -> Result<(String, String, Option<u16>)> {
     let (user, url) = session.with(id, |db| {
         Ok((vaultdb::secret(db, entry, "username")?, vaultdb::secret(db, entry, "url")?))
     })?;
-    attach::ssh_target(&user, &url).ok_or(AppError::msg("sshInvalid"))
+    let (user, host) = attach::rdp_parts(&user, &url).ok_or(AppError::msg("rdpInvalid"))?;
+    Ok((user, host, port_field(session, id, entry, "RDP-PORT")?))
+}
+
+#[tauri::command]
+pub fn rdp_target(store: State<Store>, session: State<Session>, id: String, entry: String) -> Result<String> {
+    require_unlocked(&store)?;
+    let (user, host, port) = rdp_parts_of(&session, &id, &entry)?;
+    Ok(match port {
+        Some(p) => format!("{user}@{host}:{p}"),
+        None => format!("{user}@{host}"),
+    })
+}
+
+/// Abre Escritorio remoto (`mstsc`) contra el host de la URL con el usuario de la entrada. `mstsc` no admite
+/// el usuario por parámetro, así que se escribe un `.rdp` temporal solo con dirección y usuario (nunca la
+/// contraseña, que se copia al portapapeles si se elige) y se borra poco después de lanzarlo.
+#[tauri::command]
+pub fn open_rdp(
+    store: State<Store>,
+    session: State<Session>,
+    prefs: State<PrefsState>,
+    clipboard: State<Clipboard>,
+    id: String,
+    entry: String,
+    password_field: Option<String>,
+) -> Result<()> {
+    require_unlocked(&store)?;
+    let (user, host, port) = rdp_parts_of(&session, &id, &entry)?;
+    #[cfg(windows)]
+    {
+        use std::time::Duration;
+        let dir = std::env::temp_dir().join("kpmanager-rdp");
+        std::fs::create_dir_all(&dir).map_err(|_| AppError::msg("rdpFailed"))?;
+        // Restos de ejecuciones anteriores.
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for f in rd.flatten() {
+                let old = f.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|e| e > Duration::from_secs(300));
+                if old {
+                    let _ = std::fs::remove_file(f.path());
+                }
+            }
+        }
+        copy_password_field(&session, &prefs, &clipboard, &id, &entry, password_field.as_deref())?;
+        let file = dir.join(format!("{}.rdp", uuid::Uuid::new_v4()));
+        let mut rdp = format!("full address:s:{host}\r\nusername:s:{user}\r\n");
+        if let Some(p) = port {
+            rdp.push_str(&format!("server port:i:{p}\r\n"));
+        }
+        std::fs::write(&file, rdp).map_err(|_| AppError::msg("rdpFailed"))?;
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+        let exe = std::path::Path::new(&root).join("System32").join("mstsc.exe");
+        match std::process::Command::new(exe).arg(&file).spawn() {
+            Ok(_) => {
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(30));
+                    let _ = std::fs::remove_file(file);
+                });
+                Ok(())
+            }
+            Err(_) => {
+                let _ = std::fs::remove_file(&file);
+                Err(AppError::msg("rdpFailed"))
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (user, host, port, password_field, prefs, clipboard);
+        Err(AppError::msg("rdpFailed"))
+    }
+}
+
+/// Destino SSH (`usuario@host`) de una entrada, calculado en Rust con los datos del vault: la interfaz
+/// solo lo muestra para confirmar.
+fn ssh_target_of(session: &Session, id: &str, entry: &str) -> Result<(String, Option<u16>)> {
+    let (user, url) = session.with(id, |db| {
+        Ok((vaultdb::secret(db, entry, "username")?, vaultdb::secret(db, entry, "url")?))
+    })?;
+    let target = attach::ssh_target(&user, &url).ok_or(AppError::msg("sshInvalid"))?;
+    Ok((target, port_field(session, id, entry, "SSH-PORT")?))
 }
 
 #[tauri::command]
 pub fn ssh_target(store: State<Store>, session: State<Session>, id: String, entry: String) -> Result<String> {
     require_unlocked(&store)?;
-    ssh_target_of(&session, &id, &entry)
+    let (target, port) = ssh_target_of(&session, &id, &entry)?;
+    // Lo que se muestra al confirmar es la orden tal como se lanzará.
+    Ok(match port {
+        Some(p) => format!("-p {p} {target}"),
+        None => target,
+    })
 }
 
 /// Abre una consola con `ssh usuario@host`. El destino sale de los datos del vault, validados; se lanza
@@ -900,20 +1011,10 @@ pub fn open_ssh(
     password_field: Option<String>,
 ) -> Result<()> {
     require_unlocked(&store)?;
-    let target = ssh_target_of(&session, &id, &entry)?;
-    // Contraseña SSH: el campo elegido se copia (desde Rust, con las protecciones del portapapeles y su
-    // borrado automático) para pegarlo en el aviso de `ssh`. Solo la contraseña o un campo personalizado.
-    let copy_ssh_password = || -> Result<()> {
-    if let Some(field) = password_field.clone() {
-        if field != "password" && !field.starts_with("custom:") {
-            return Err(AppError::NotFound);
-        }
-        let text = session.with(&id, |db| vaultdb::secret(db, &entry, &field))?;
-        let secs = prefs.get().clipboard_clear_secs;
-        clipboard.copy_secret(&text, (secs > 0).then(|| std::time::Duration::from_secs(secs as u64)))?;
-    }
-    Ok(())
-    };
+    let (target, port) = ssh_target_of(&session, &id, &entry)?;
+    // Contraseña: el campo elegido se copia (desde Rust, con las protecciones del portapapeles y su
+    // borrado automático) para pegarlo en el aviso de `ssh`.
+    let copy_ssh_password = || copy_password_field(&session, &prefs, &clipboard, &id, &entry, password_field.as_deref());
     let settings = prefs.get();
     if settings.ssh_client == "putty" {
         // PuTTY se lanza directamente (sin intérprete de órdenes): `putty.exe -ssh usuario@host`. El usuario
@@ -921,7 +1022,9 @@ pub fn open_ssh(
         let exe = settings.putty_path.map(PathBuf::from).filter(|p| is_putty(p)).ok_or(AppError::msg("puttyMissing"))?;
         copy_ssh_password()?;
         return std::process::Command::new(exe)
-            .args(["-ssh", &target])
+            .args(["-ssh"])
+            .args(port.iter().flat_map(|p| ["-P".to_owned(), p.to_string()]))
+            .arg(&target)
             .spawn()
             .map(|_| ())
             .map_err(|_| AppError::msg("sshFailed"));
@@ -935,7 +1038,10 @@ pub fn open_ssh(
         // y 255 si falla la conexión o la autenticación. Solo en ese caso la ventana espera una tecla
         // para poder leer el error; si no, se cierra al terminar la sesión.
         std::process::Command::new("cmd")
-            .raw_arg(format!("/c ssh {target} & if errorlevel 255 pause"))
+            .raw_arg(format!(
+                "/c ssh{} {target} & if errorlevel 255 pause",
+                port.map(|p| format!(" -p {p}")).unwrap_or_default()
+            ))
             .creation_flags(CREATE_NEW_CONSOLE)
             .spawn()
             .map(|_| ())

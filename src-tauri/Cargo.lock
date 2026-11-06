@@ -2332,7 +2332,7 @@ dependencies = [
 
 [[package]]
 name = "kpmanager"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "arboard",
  "argon2",
