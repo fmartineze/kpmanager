@@ -117,6 +117,13 @@ pub fn unlock(store: State<Store>, password: String) -> Result<()> {
     store.unlock(&password)
 }
 
+/// Oculta la ventana en la bandeja. La interfaz la usa tras un bloqueo por inactividad: una ventana bloqueada
+/// que se queda detrás de otras ventanas puede acabar sin pintarse; en la bandeja no.
+#[tauri::command]
+pub fn hide_window(app: tauri::AppHandle) {
+    shell::hide_main(&app);
+}
+
 #[tauri::command]
 pub fn lock(app: tauri::AppHandle) {
     shell::lock_state(&app);

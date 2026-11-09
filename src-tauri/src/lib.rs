@@ -122,6 +122,7 @@ pub fn run() {
             commands::save_attachment,
             commands::open_link,
             commands::ssh_target,
+            commands::hide_window,
             commands::open_ssh,
             commands::rdp_target,
             commands::open_rdp,

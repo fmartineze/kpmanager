@@ -16,8 +16,16 @@ pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
+        repaint(&w); // por si el WebView se quedó sin pintar mientras estaba oculto o detrás de otras ventanas
         let _ = w.set_focus();
         let _ = app.emit("focus-search", ());
+    }
+}
+
+/// Oculta la ventana en la bandeja del sistema.
+pub fn hide_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
     }
 }
 
