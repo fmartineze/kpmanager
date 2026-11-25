@@ -117,15 +117,18 @@ pub fn unlock(store: State<Store>, password: String) -> Result<()> {
     store.unlock(&password)
 }
 
-/// Oculta la ventana en la bandeja. La interfaz la usa tras un bloqueo por inactividad: una ventana bloqueada
-/// que se queda detrás de otras ventanas puede acabar sin pintarse; en la bandeja no.
-#[tauri::command]
-pub fn hide_window(app: tauri::AppHandle) {
-    shell::hide_main(&app);
-}
-
 #[tauri::command]
 pub fn lock(app: tauri::AppHandle) {
+    shell::lock_state(&app);
+}
+
+/// Bloqueo por inactividad: primero pasa la ventana a la bandeja y después bloquea. En ese orden, el cambio de
+/// protección de capturas al cerrar el vault ocurre con la ventana oculta, no detrás de otras ventanas, donde
+/// la dejaba en blanco. No depende de temporizadores de la interfaz, que el WebView frena en segundo plano.
+#[tauri::command]
+pub fn lock_idle(app: tauri::AppHandle) {
+    shell::trace(&app, "lock_idle");
+    shell::hide_main(&app);
     shell::lock_state(&app);
 }
 
@@ -451,7 +454,9 @@ pub struct PrefsUpdate {
 }
 
 #[tauri::command]
-pub fn set_prefs(prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs> {
+pub fn set_prefs(app: tauri::AppHandle, prefs: State<PrefsState>, update: PrefsUpdate) -> Result<Prefs> {
+    // Se aplica con el usuario en Ajustes y la ventana delante; no hace nada si no cambia.
+    shell::protect_window(&app, update.hide_from_capture);
     // Un valor desconocido (fichero editado a mano, versión futura) vuelve al predeterminado.
     let theme = if THEMES.contains(&update.theme.as_str()) { update.theme } else { "system".into() };
     let language = if LANGUAGES.contains(&update.language.as_str()) { update.language } else { "auto".into() };
@@ -749,7 +754,6 @@ pub async fn open_tree(
     let p = prefs.get();
     let tree = vaultdb::tree(&db, p.show_vault_icons);
     session.set(id.clone(), db);
-    shell::protect_window(&app, p.hide_from_capture);
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let _ = store.write(|d| {
         if let Some(v) = d.vaults.iter_mut().find(|v| v.id == id) {

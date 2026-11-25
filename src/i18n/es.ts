@@ -362,7 +362,7 @@ export const es = {
   "settings.clipboardClear": "Vaciar el portapapeles tras copiar un secreto",
   "settings.clipboardClearHelp": "Solo se vacía si sigue conteniendo lo copiado desde aquí. No queda en el historial de Windows (Win+V) ni se sincroniza.",
   "settings.vaultIdle": "Cerrar el vault abierto tras un rato sin actividad",
-  "settings.hideCapture": "Ocultar la ventana en capturas de pantalla y al compartir pantalla mientras se ve un vault",
+  "settings.hideCapture": "Ocultar la ventana en capturas de pantalla y al compartir pantalla",
   "settings.vaultIcons": "Mostrar los iconos de grupos y entradas del vault",
   "settings.never": "Nunca",
   "settings.secondsShort": "{n} s",

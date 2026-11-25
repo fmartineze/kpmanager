@@ -11,8 +11,29 @@ use crate::prefs::PrefsState;
 use crate::store::Store;
 use crate::vaultdb::Session;
 
+/// Traza de diagnóstico de la ventana (solo en desarrollo; nunca lleva datos de vaults).
+pub fn trace(app: &AppHandle, what: &str) {
+    #[cfg(debug_assertions)]
+    {
+        let (vis, foc, min) = app
+            .get_webview_window("main")
+            .map(|w| (w.is_visible().unwrap_or(false), w.is_focused().unwrap_or(false), w.is_minimized().unwrap_or(false)))
+            .unwrap_or_default();
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() % 86400).unwrap_or(0);
+        eprintln!(
+            "[kpm {:02}:{:02}:{:02} UTC] {what} visible={vis} focused={foc} minimized={min}",
+            t / 3600,
+            t / 60 % 60,
+            t % 60
+        );
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = (app, what);
+}
+
 /// Trae la ventana al frente (aunque esté minimizada u oculta en la bandeja) y pide enfocar el buscador.
 pub fn show_main(app: &AppHandle) {
+    trace(app, "show_main");
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
@@ -24,6 +45,7 @@ pub fn show_main(app: &AppHandle) {
 
 /// Oculta la ventana en la bandeja del sistema.
 pub fn hide_main(app: &AppHandle) {
+    trace(app, "hide_main");
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.hide();
     }
@@ -32,6 +54,7 @@ pub fn hide_main(app: &AppHandle) {
 /// Bloquea todo lo sensible: la configuración cifrada, el vault abierto y el portapapeles.
 /// No avisa a la interfaz: la usa el comando `lock`, que ya viene de ella.
 pub fn lock_state(app: &AppHandle) {
+    trace(app, "lock_state");
     app.state::<Store>().lock();
     close_vault(app);
     app.state::<Clipboard>().clear_if_ours();
@@ -45,10 +68,9 @@ pub fn lock_all(app: &AppHandle) {
     let _ = app.emit("lock-request", ());
 }
 
-/// Cierra el vault que se está navegando y devuelve la ventana a su estado normal.
+/// Cierra el vault que se está navegando. La exclusión de capturas no se toca aquí (ver `protect_window`).
 pub fn close_vault(app: &AppHandle) {
     app.state::<Session>().close();
-    protect_window(app, false);
 }
 
 /// Si la ventana está ahora mismo excluida de capturas. Cada bloqueo pide «desproteger»; sin este estado
@@ -63,6 +85,7 @@ pub fn protect_window(app: &AppHandle, on: bool) {
     if app.state::<CaptureProtection>().0.swap(on, Ordering::SeqCst) == on {
         return;
     }
+    trace(app, if on { "protect ON" } else { "protect OFF" });
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_content_protected(on);
         repaint(&w);
@@ -153,6 +176,11 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 /// Minimizar a la bandeja: se oculta la ventana cuando pasa a minimizada, sea cual sea la vía
 /// (botón propio, barra de tareas, Win+↓).
 pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
+    match event {
+        WindowEvent::Focused(f) => trace(window.app_handle(), if *f { "event focused" } else { "event unfocused" }),
+        WindowEvent::Resized(_) => trace(window.app_handle(), "event resized"),
+        _ => {}
+    }
     let prefs = window.app_handle().state::<PrefsState>().get();
     // Oculta la ventana y, si está configurado, bloquea antes de que quede fuera de la vista.
     let hide = |window: &tauri::Window| {

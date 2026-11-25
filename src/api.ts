@@ -165,7 +165,8 @@ export const api = {
   status: () => invoke<Status>("status"),
   unlock: (password: string) => invoke<void>("unlock", { password }),
   lock: () => invoke<void>("lock"),
-  hideWindow: () => invoke<void>("hide_window"),
+  /** Bloqueo por inactividad: Rust oculta la ventana en la bandeja y después bloquea. */
+  lockIdle: () => invoke<void>("lock_idle"),
   helloStatus: () => invoke<HelloStatus>("hello_status"),
   helloEnable: (password: string) => invoke<void>("hello_enable", { password }),
   helloDisable: () => invoke<void>("hello_disable"),

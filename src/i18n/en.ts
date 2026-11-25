@@ -437,7 +437,7 @@ export const en: Record<Key, string> = {
   "settings.clipboardClear": "Clear the clipboard after copying a secret",
   "settings.clipboardClearHelp": "It is only cleared if it still holds what was copied from here. It never reaches Windows history (Win+V) or syncs to the cloud.",
   "settings.vaultIdle": "Close the open vault after a period of inactivity",
-  "settings.hideCapture": "Hide the window from screenshots and screen sharing while a vault is shown",
+  "settings.hideCapture": "Hide the window from screenshots and screen sharing",
   "settings.vaultIcons": "Show the vault's group and entry icons",
   "settings.never": "Never",
   "settings.secondsShort": "{n} s",

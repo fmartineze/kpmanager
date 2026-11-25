@@ -182,7 +182,8 @@ export default function App() {
 
   // `idle`: bloqueo por inactividad. `manual`: botón Bloquear, menú de la bandeja o al ocultar la ventana.
   const lock = useCallback(async (kind: "idle" | "manual" = "idle") => {
-    await api.lock();
+    // Por inactividad, Rust pasa la ventana a la bandeja antes de bloquear (ver `lock_idle`).
+    await (kind === "idle" ? api.lockIdle() : api.lock());
     setHello(await api.helloStatus().catch(() => ({ supported: false, enabled: false })));
     setHelloMode(kind === "idle" ? "interaction" : "return");
     setVaults([]);
@@ -194,9 +195,6 @@ export default function App() {
     setBrowse(null); // Rust ya ha cerrado el vault; aquí se descarta lo que la interfaz tenía
     setIsNew(false);
     setPhase("locked");
-    // Bloqueo por inactividad: la ventana pasa a la bandeja una vez pintada la pantalla de bloqueo, en vez de
-    // quedarse detrás de otras ventanas, donde podía acabar en blanco. Se recupera con el icono o el atajo global.
-    if (kind === "idle") window.setTimeout(() => api.hideWindow().catch(() => {}), 250);
   }, []);
 
   // Bloqueo automático por inactividad.

@@ -55,6 +55,9 @@ pub fn run() {
             shell::setup_tray(app.handle())?;
             spawn_idle_watcher(app.handle().clone());
             // La ventana se crea oculta (tauri.conf) y solo se muestra si no es un arranque con el sistema.
+            // La exclusión de capturas se fija una vez, antes de mostrar la ventana, y solo cambia desde Ajustes.
+            // Activarla y desactivarla al abrir y cerrar vaults dejaba la ventana en blanco tras los bloqueos.
+            shell::protect_window(app.handle(), app.state::<prefs::PrefsState>().get().hide_from_capture);
             let minimized = std::env::args().any(|a| a == "--minimized");
             if !minimized {
                 if let Some(w) = app.get_webview_window("main") {
@@ -73,6 +76,7 @@ pub fn run() {
             commands::status,
             commands::unlock,
             commands::lock,
+            commands::lock_idle,
             commands::change_master_password,
             commands::hello_status,
             commands::hello_enable,
@@ -122,7 +126,6 @@ pub fn run() {
             commands::save_attachment,
             commands::open_link,
             commands::ssh_target,
-            commands::hide_window,
             commands::open_ssh,
             commands::rdp_target,
             commands::open_rdp,
@@ -145,7 +148,7 @@ fn spawn_idle_watcher(app: tauri::AppHandle) {
         std::thread::sleep(std::time::Duration::from_secs(10));
         let minutes = app.state::<prefs::PrefsState>().get().vault_idle_minutes;
         if minutes > 0 && app.state::<vaultdb::Session>().close_if_idle(std::time::Duration::from_secs(minutes as u64 * 60)) {
-            shell::protect_window(&app, false);
+            shell::trace(&app, "vault idle close");
             let _ = app.emit("vault-closed", ());
         }
     });
