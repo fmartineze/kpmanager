@@ -115,7 +115,13 @@ In each client's form (pencil) you can add **tags**: type and press **Enter** or
 When you add a folder, the app asks whether you want to **keep watching it**. If you say yes, every time you open the app (and when you come back to it) it checks the folder and tells you about:
 
 - **New vaults:** it asks whether to add them. The ones you dismiss are not suggested again.
+- **Moved or renamed vaults:** if a vault is no longer at its path but a `.kdbx` with the same file name
+  shows up in another watched folder, it offers to update the path, keeping the password, key file and tags.
+  It comes checked when the new file opens with the saved credentials.
 - **Vaults that no longer exist:** it asks whether to remove them from the list.
+
+All vaults are checked for this, including those added outside watched folders. They are not considered
+deleted if their drive or network share is not reachable (an unplugged USB drive or network).
 
 From **Folders** you can see each folder's status, **rescan it completely** (including dismissed vaults), stop watching it, or suggest the dismissed ones again.
 

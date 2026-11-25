@@ -232,3 +232,4 @@ button { font-family: inherit; }
 .dataloc { margin-top: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; max-width: 320px; text-align: left; }
 .dataloc-path { font-family: var(--kp-font-mono); overflow-wrap: anywhere; user-select: text; }
 .dataloc .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.res-warn { color: var(--kp-danger); font-weight: 600; font-size: var(--kp-fs-xs); }

@@ -115,7 +115,13 @@ En el formulario de cada cliente (lápiz) puedes añadir **etiquetas**: escribe 
 Al añadir una carpeta, la app te pregunta si quieres **mantenerla en seguimiento**. Si dices que sí, cada vez que abras la app (y al volver a ella) revisa la carpeta y te avisa de:
 
 - **Vaults nuevos:** te pregunta si añadirlos. Los que descartes no se vuelven a proponer.
+- **Vaults movidos o renombrados:** si un vault ya no está en su ruta pero aparece un `.kdbx` con el mismo
+  nombre en otra carpeta en seguimiento, te propone actualizar la ruta conservando la contraseña, el fichero
+  de clave y las etiquetas. Viene marcado si el fichero nuevo se abre con las credenciales guardadas.
 - **Vaults que ya no existen:** te pregunta si quitarlos de la lista.
+
+Los vaults que ya no existen se revisan todos, también los añadidos fuera de las carpetas en seguimiento. No
+se dan por borrados si su unidad o recurso de red no está accesible (un USB o una red desconectados).
 
 Desde **Carpetas** puedes ver el estado de cada una, **re-escanearla por completo** (incluidos los descartados), dejar de vigilarla o volver a proponer lo descartado.
 

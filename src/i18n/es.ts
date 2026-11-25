@@ -137,11 +137,15 @@ export const es = {
 
   // Cambios detectados
   "sync.title": "Cambios detectados",
-  "sync.sub": "En las carpetas en seguimiento.",
+  "sync.sub": "En tus vaults y en las carpetas en seguimiento.",
   "sync.newTitle": "Vaults nuevos",
   "sync.newHelp": "Los que desmarques no se volverán a proponer.",
+  "sync.movedTitle": "Movidos o renombrados",
+  "sync.movedHelp": "Ya no están en su ruta, pero sí en otra. Se actualiza la ruta y se conservan la contraseña y el fichero de clave.",
+  "sync.movedUnverified": "sin comprobar",
+  "sync.relocated": "{n} actualizado(s)",
   "sync.missingTitle": "Ya no existen en disco",
-  "sync.missingHelp": "Marca los que quieras quitar de la lista.",
+  "sync.missingHelp": "Ya no existen en su ruta. Marca los que quieras quitar de la lista.",
   "sync.added": "{n} añadido(s)",
   "sync.removed": "{n} eliminado(s)",
   "sync.noChange": "Sin cambios",

@@ -15,6 +15,8 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
   const t = useT();
   const [add, setAdd] = useState(new Set(report.new.map((c) => c.path)));
   const [remove, setRemove] = useState(new Set(report.missing.map((v) => v.id)));
+  // Los movidos comprobados (abren con lo guardado) van marcados; los dudosos, a elección del usuario.
+  const [relocate, setRelocate] = useState(new Set(report.moved.filter((m) => m.verified).map((m) => m.id)));
   const [error, setError] = useState("");
 
   const flip = (set: Set<string>, setter: (s: Set<string>) => void, x: string) => {
@@ -29,10 +31,13 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
       const toAdd = report.new.filter((c) => add.has(c.path));
       // Lo que se deja sin marcar se ignora para no volver a preguntar.
       const ignored = report.new.filter((c) => !add.has(c.path)).map((c) => c.path);
+      const toMove = report.moved.filter((m) => relocate.has(m.id));
+      if (toMove.length) await api.relocateVaults(toMove.map((m) => ({ id: m.id, path: m.to })));
       if (toAdd.length) await api.importCandidates(toAdd.map(({ client, path }) => ({ client, path })));
       if (ignored.length) await api.ignorePaths(ignored);
       if (remove.size) await api.deleteVaults([...remove]);
       const parts = [];
+      if (toMove.length) parts.push(t("sync.relocated", { n: toMove.length }));
       if (toAdd.length) parts.push(t("sync.added", { n: toAdd.length }));
       if (remove.size) parts.push(t("sync.removed", { n: remove.size }));
       onDone(parts.join(", ") || t("sync.noChange"));
@@ -57,6 +62,26 @@ export function SyncDialog({ report, onClose, onDone }: Props) {
       onClose={onClose}
       footer={footer}
     >
+      {report.moved.length > 0 && (
+        <div className="section">
+          <span className="section-title">{t("sync.movedTitle")}</span>
+          <div className="help">{t("sync.movedHelp")}</div>
+          <div className="results">
+            <div className="results-list">
+              {report.moved.map((m) => (
+                <label key={m.id} className="res">
+                  <input type="checkbox" className="sr" checked={relocate.has(m.id)} onChange={() => flip(relocate, setRelocate, m.id)} />
+                  <Box on={relocate.has(m.id)} />
+                  <span className="res-txt">
+                    <span className="res-name">{m.client}{!m.verified && <span className="res-warn"> · {t("sync.movedUnverified")}</span>}</span>
+                    <span className="res-path" title={`${m.from}\n→ ${m.to}`}>→ {m.to}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {report.new.length > 0 && (
         <div className="section">
           <span className="section-title">{t("sync.newTitle")}</span>

@@ -149,7 +149,7 @@ export default function App() {
       lastCheck.current = Date.now();
       try {
         const r = await api.checkWatched();
-        if (r.new.length || r.missing.length) setDialog((d) => d ?? { kind: "sync", report: r });
+        if (r.new.length || r.missing.length || r.moved.length) setDialog((d) => d ?? { kind: "sync", report: r });
         else if (!silent) showToast(translate("toast.noChanges"));
         if (r.unreachable.length && !silent) showToast(translate("toast.unreachable", { path: r.unreachable[0] }), "error");
       } catch {

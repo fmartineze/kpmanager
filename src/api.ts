@@ -155,9 +155,20 @@ export interface WatchedView {
   ignoredCount: number;
 }
 
+/** Vault que ya no está en su ruta pero sí en otra (carpeta renombrada o movida). */
+export interface MovedVault {
+  id: string;
+  client: string;
+  from: string;
+  to: string;
+  /** Se abre con la contraseña y el fichero de clave guardados: es el mismo vault. */
+  verified: boolean;
+}
+
 export interface SyncReport {
   new: Candidate[];
   missing: Vault[];
+  moved: MovedVault[];
   unreachable: string[];
 }
 
@@ -236,6 +247,7 @@ export const api = {
   removeWatched: (path: string) => invoke<void>("remove_watched", { path }),
   checkWatched: () => invoke<SyncReport>("check_watched"),
   ignorePaths: (paths: string[]) => invoke<void>("ignore_paths", { paths }),
+  relocateVaults: (items: { id: string; path: string }[]) => invoke<number>("relocate_vaults", { items }),
   deleteVaults: (ids: string[]) => invoke<number>("delete_vaults", { ids }),
 };
 

@@ -601,10 +601,23 @@ pub fn detect_keepassxc(store: State<Store>) -> Result<SettingsView> {
 pub struct SyncReport {
     /// .kdbx en carpetas vigiladas que no están registrados ni ignorados.
     new: Vec<Candidate>,
-    /// Vaults registrados dentro de una carpeta vigilada cuyo fichero ya no existe.
+    /// Vaults registrados cuyo fichero ya no existe (con su unidad accesible).
     missing: Vec<VaultView>,
+    /// Vaults que no existen en su ruta pero sí en otra de una carpeta vigilada (carpeta renombrada o movida).
+    moved: Vec<Moved>,
     /// Carpetas vigiladas que no se pueden leer (unidad desconectada, red caída…).
     unreachable: Vec<String>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Moved {
+    id: String,
+    client: String,
+    from: String,
+    to: String,
+    /// El fichero nuevo se abre con la contraseña y el fichero de clave guardados: es el mismo vault.
+    verified: bool,
 }
 
 #[derive(Serialize)]
@@ -672,15 +685,33 @@ pub fn remove_watched(store: State<Store>, path: String) -> Result<()> {
     })
 }
 
-/// Revisa las carpetas en seguimiento y devuelve lo nuevo y lo desaparecido.
+/// Revisa las carpetas en seguimiento y los vaults registrados: lo nuevo, lo desaparecido y lo movido.
 #[tauri::command]
 pub async fn check_watched(store: State<'_, Store>) -> Result<SyncReport> {
     let (vaults, watched, ignored) =
         store.read(|d| (d.vaults.clone(), d.watched.clone(), d.ignored.clone()))?;
-    Ok(sync_report(&vaults, &watched, &ignored))
+    // Comprobar un movido abre el .kdbx (derivación de clave): fuera del hilo de la interfaz.
+    blocking(move || Ok(sync_report(&vaults, &watched, &ignored, &opens_with_saved_credentials))).await
 }
 
-fn sync_report(vaults: &[Vault], watched: &[PathBuf], ignored: &[PathBuf]) -> SyncReport {
+/// ¿Se abre el `.kdbx` de `path` con la contraseña y el fichero de clave guardados de `vault`?
+fn opens_with_saved_credentials(vault: &Vault, path: &std::path::Path) -> bool {
+    let probe = Vault { path: path.to_path_buf(), ..vault.clone() };
+    vaultdb::open(&probe).is_ok()
+}
+
+/// La unidad (o el recurso de red) de la ruta está accesible. Si no, que falte el fichero no significa que
+/// se borrara: puede ser un USB o una red desconectados.
+fn root_reachable(p: &std::path::Path) -> bool {
+    p.is_absolute() && p.ancestors().last().is_some_and(|r| r.exists())
+}
+
+fn sync_report(
+    vaults: &[Vault],
+    watched: &[PathBuf],
+    ignored: &[PathBuf],
+    verify: &dyn Fn(&Vault, &std::path::Path) -> bool,
+) -> SyncReport {
     let known: HashSet<String> = vaults.iter().map(|v| path_key(&v.path)).collect();
     let ignored: HashSet<String> = ignored.iter().map(|p| path_key(p)).collect();
 
@@ -701,12 +732,72 @@ fn sync_report(vaults: &[Vault], watched: &[PathBuf], ignored: &[PathBuf]) -> Sy
     let mut seen = HashSet::new();
     new.retain(|c| seen.insert(path_key(&c.path)));
 
-    let missing = vaults
+    // Todos los vaults registrados, no solo los de carpetas vigiladas; pero no los de una carpeta vigilada
+    // inaccesible ni los de una unidad desconectada.
+    let blocked: Vec<PathBuf> = watched.iter().filter(|r| !r.is_dir()).cloned().collect();
+    let gone: Vec<&Vault> = vaults
         .iter()
-        .filter(|v| reachable.iter().any(|r| is_under(&v.path, r)) && !v.path.is_file())
-        .map(VaultView::from)
+        .filter(|v| !v.path.is_file() && root_reachable(&v.path) && !blocked.iter().any(|r| is_under(&v.path, r)))
         .collect();
-    SyncReport { new, missing, unreachable }
+
+    // Un vault que falta y un .kdbx nuevo con el mismo nombre de fichero: probablemente se renombró o movió
+    // la carpeta. Si se abre con las credenciales guardadas, es seguro el mismo.
+    let file_name = |p: &std::path::Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
+    let mut moved = Vec::new();
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut missing = Vec::new();
+    for v in gone {
+        let same_name: Vec<&Candidate> = new
+            .iter()
+            .filter(|c| file_name(&c.path) == file_name(&v.path) && !taken.contains(&path_key(&c.path)))
+            .collect();
+        let verified = same_name.iter().find(|c| verify(v, &c.path));
+        let pick = verified.copied().or(if same_name.len() == 1 { Some(same_name[0]) } else { None });
+        match pick {
+            Some(c) => {
+                taken.insert(path_key(&c.path));
+                moved.push(Moved {
+                    id: v.id.clone(),
+                    client: v.client.clone(),
+                    from: v.path.to_string_lossy().into_owned(),
+                    to: c.path.to_string_lossy().into_owned(),
+                    verified: verified.is_some(),
+                });
+            }
+            None => missing.push(VaultView::from(v)),
+        }
+    }
+    // Lo que se propone como movido no se propone además como nuevo.
+    new.retain(|c| !taken.contains(&path_key(&c.path)));
+    SyncReport { new, missing, moved, unreachable }
+}
+
+#[derive(Deserialize)]
+pub struct Relocation {
+    id: String,
+    path: String,
+}
+
+/// Actualiza la ruta de vaults movidos o renombrados (se conservan contraseña, fichero de clave y etiquetas).
+#[tauri::command]
+pub fn relocate_vaults(store: State<Store>, items: Vec<Relocation>) -> Result<usize> {
+    store.write(|d| {
+        let mut known: HashSet<String> = d.vaults.iter().map(|v| path_key(&v.path)).collect();
+        let mut done = 0;
+        for it in items {
+            let path = PathBuf::from(&it.path);
+            if !path.is_file() || known.contains(&path_key(&path)) {
+                continue;
+            }
+            if let Some(v) = d.vaults.iter_mut().find(|v| v.id == it.id) {
+                known.remove(&path_key(&v.path));
+                known.insert(path_key(&path));
+                v.path = path;
+                done += 1;
+            }
+        }
+        Ok(done)
+    })
 }
 
 /// Marca rutas como "no añadir" para que el seguimiento no vuelva a preguntar por ellas.
@@ -1085,12 +1176,56 @@ mod tests {
 
         // B ignorado (escrito con otra forma de la misma ruta), C pendiente.
         let alt_b = PathBuf::from(b.to_string_lossy().replace('\\', "/"));
-        let r = sync_report(&[vault.clone()], &watched, &[alt_b]);
+        let r = sync_report(&[vault.clone()], &watched, &[alt_b], &|_, _| false);
         let found: Vec<_> = r.new.iter().map(|x| x.path.clone()).collect();
         assert_eq!(found, vec![c.clone()]);
 
         // Sin ignorados se proponen B y C.
-        assert_eq!(sync_report(&[vault], &watched, &[]).new.len(), 2);
+        assert_eq!(sync_report(&[vault], &watched, &[], &|_, _| false).new.len(), 2);
+    }
+
+    #[test]
+    fn renamed_folders_are_proposed_as_moved_not_as_new_and_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("Acme SL")).unwrap();
+        fs::write(dir.path().join("Acme SL").join("acme.kdbx"), b"").unwrap();
+        // Registrado cuando la carpeta se llamaba "Acme".
+        let old = dir.path().join("Acme").join("acme.kdbx");
+        let vault = Vault { id: "1".into(), client: "Acme".into(), path: old.clone(), ..Default::default() };
+        let watched = [dir.path().to_path_buf()];
+
+        let r = sync_report(&[vault.clone()], &watched, &[], &|_, _| true);
+        assert!(r.new.is_empty() && r.missing.is_empty(), "ni nuevo ni desaparecido");
+        assert_eq!(r.moved.len(), 1);
+        assert!(r.moved[0].verified && r.moved[0].to.ends_with("acme.kdbx") && r.moved[0].to.contains("Acme SL"));
+
+        // Sin poder comprobarlo (no abre con lo guardado), se propone igual pero sin verificar.
+        let r = sync_report(&[vault.clone()], &watched, &[], &|_, _| false);
+        assert_eq!((r.moved.len(), r.moved[0].verified), (1, false));
+
+        // Con otro nombre de fichero no se adivina: uno desaparecido y otro nuevo.
+        fs::rename(dir.path().join("Acme SL").join("acme.kdbx"), dir.path().join("Acme SL").join("otro.kdbx")).unwrap();
+        let r = sync_report(&[vault], &watched, &[], &|_, _| true);
+        assert_eq!((r.moved.len(), r.missing.len(), r.new.len()), (0, 1, 1));
+    }
+
+    #[test]
+    fn vaults_outside_watched_folders_are_checked_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let present = dir.path().join("a.kdbx");
+        fs::write(&present, b"").unwrap();
+        let vaults = [
+            Vault { id: "1".into(), client: "Está".into(), path: present, ..Default::default() },
+            Vault { id: "2".into(), client: "Borrado".into(), path: dir.path().join("b.kdbx"), ..Default::default() },
+            // Unidad que no existe (USB desconectado): no se da por borrado.
+            Vault { id: "3".into(), client: "USB".into(), path: PathBuf::from(r"Q:\no\existe.kdbx"), ..Default::default() },
+        ];
+        let r = sync_report(&vaults, &[], &[], &|_, _| false);
+        let ids: Vec<_> = r.missing.iter().map(|v| v.id.clone()).collect();
+        if std::path::Path::new(r"Q:\").exists() {
+            return; // en un equipo con unidad Q: la prueba de la unidad desconectada no aplica
+        }
+        assert_eq!(ids, ["2"]);
     }
 }
 

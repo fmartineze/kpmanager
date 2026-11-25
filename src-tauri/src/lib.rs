@@ -104,6 +104,7 @@ pub fn run() {
             commands::add_watched,
             commands::remove_watched,
             commands::check_watched,
+            commands::relocate_vaults,
             commands::ignore_paths,
             commands::delete_vaults,
             commands::set_favorite,
